@@ -1,3 +1,5 @@
+[Documentation](../README.md) / Reference
+
 # Snapshot lifecycle and roots
 
 ## Commands and API

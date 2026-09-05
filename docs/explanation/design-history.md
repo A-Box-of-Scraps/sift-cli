@@ -1,3 +1,15 @@
+[Documentation](../README.md) / Explanation
+
+# Historical design notes
+
+These original discussion notes are preserved as history. Status statements, CLI
+sketches, and proposed features below are not current documentation. Some proposals
+were implemented differently; others remain unimplemented. Start with the
+[CLI reference](../reference/cli.md) for supported behavior and
+[search explanation](search.md) for the current retrieval design.
+
+---
+
 # sift
 
 Status: initial idea and discussion notes with explicit decisions recorded below.

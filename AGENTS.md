@@ -10,9 +10,7 @@ Here is an overview of the project:
 ```
 .cargo/config.toml
 benchmarks/
-docs/
-  IDEA.md       # Design decisions and proposals
-  TODO.MD       # Remaining work
+docs/README.md  # Documentation entry point
 src/
 tests/
 .gitignore

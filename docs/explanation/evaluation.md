@@ -1,8 +1,10 @@
-# Section 2 reference evaluation
+[Documentation](../README.md) / Explanation
+
+# Reference evaluation and decisions
 
 ## Scope and reproduction
 
-This completes the synthetic evaluation, not validation on real repositories.
+This records a completed synthetic evaluation, not validation on real repositories.
 The retained machine-readable summary is `benchmarks/results/section2.json`;
 reference conditions are in `benchmarks/results/reference.json`.
 
@@ -11,9 +13,9 @@ python benchmarks/experiments.py --output target/evaluation-section2-reference \
   --repetitions 20 --reference benchmarks/results/reference.json
 ```
 
-Choose a new output directory when repeating. Full reports, raw samples,
-experimental sources, binaries, and snapshots from the recorded run remain in
-`target/evaluation-section2-reference`. The checked-in summary records hashes of
+Choose a new output directory when repeating. The recorded run wrote full reports, raw samples,
+experimental sources, binaries, and snapshots to
+`target/evaluation-section2-reference`; these local artifacts are not checked in. The checked-in summary records hashes of
 those reports, sources, and binaries, plus relevance and timing summaries. It
 omits full excerpts and raw samples. Reproduction on another machine requires
 new reference notes, not reuse of this hardware description.
@@ -31,7 +33,7 @@ lines. Corpus SHA-256:
 `4aa8b6f78c91509e3da7bca26b5f09c268137b791a3610b8108f0b640bf1bfa5`.
 All variants used the same corpus and 18 relevance queries. Indexing and queries
 were explicitly warmed, with 20 measured repetitions. No cache eviction was
-performed. See `BENCHMARKS.md` for the separate cold-input-cache protocol.
+performed. See [benchmark protocol](../reference/benchmarks.md) for the separate cold-input-cache protocol.
 
 ## Relevance and diversity
 
@@ -125,5 +127,4 @@ real-repository performance remain unassessed.
 - Retain 3:1 path/body weights. Neither alternative improves measured retrieval.
 - Do not add production query reranking or filler stopwords on this evidence.
 - Expand real-project and boundary-sensitive fixtures before making broader
-  claims. This is follow-up evidence gathering, not an unfinished section-2
-  implementation or a claim that synthetic results generalize.
+  claims. These measurements do not establish that synthetic results generalize.

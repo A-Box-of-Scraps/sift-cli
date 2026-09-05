@@ -1,3 +1,5 @@
+[Documentation](../README.md) / Reference
+
 # Relevance and performance evaluation
 
 Run from the repository root on Linux. Requires Cargo, the configured Clang/LLD
@@ -17,7 +19,7 @@ snapshots, measurement helper, and `report.json`. Snapshots use a run-local XDG
 data directory; the normal Sift store is not touched. Remove output directories
 manually when finished. A full sweep can consume several GiB.
 
-The completed reference evaluation and decisions are in `EVALUATION.md` and
+The completed reference evaluation and decisions are in [evaluation and decisions](../explanation/evaluation.md) and
 `benchmarks/results/section2.json`.
 
 ## Corpus and relevance
@@ -160,7 +162,7 @@ limit. A bounded pool can miss alternatives beyond the cutoff or underfill after
 overlap removal. SQL LIMIT bounds materialization, not FTS matching/scoring work.
 
 Chunk size/overlap, field weights, and OR-connected query terms remain unchanged.
-The evidence and reasons for not adopting other experiments are in `EVALUATION.md`.
+The evidence and reasons for not adopting other experiments are in [evaluation and decisions](../explanation/evaluation.md).
 
 ## Flamegraphs
 

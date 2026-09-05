@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Linux-only, standard-library evaluation driver. See docs/BENCHMARKS.md."""
+"""Linux-only, standard-library evaluation driver. See docs/reference/benchmarks.md."""
 import argparse
 import hashlib
 import json

@@ -1,3 +1,5 @@
+[Documentation](../README.md) / Reference
+
 # Input discovery and adapters
 
 ```sh

@@ -5,6 +5,10 @@
 Sift is a CLI for indexing and querying files, designed for LLMs and AI coding agents.
 Its goal is to serve a similar discovery role to rg (content search) while returning more relevant results through indexing.
 
+## Documentation
+
+Start [HERE](docs/README.md)!
+
 ## License
 
 Licensed under the [MIT License](LICENSE) by Titouan Réthoré.
