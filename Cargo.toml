@@ -1,0 +1,9 @@
+[package]
+name = "sift"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Google Maps for your workspace, in the terminal."
+repository = "https://github.com/A-Box-of-Scraps/sift-cli"
+
+[dependencies]

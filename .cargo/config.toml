@@ -1,0 +1,4 @@
+# Use Clang as the driver for LLVM's LLD linker on Linux GNU targets.
+[target.'cfg(all(target_os = "linux", target_env = "gnu"))']
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]

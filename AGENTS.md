@@ -8,11 +8,26 @@ Its goal is to serve a similar discovery role to rg (content search) while retur
 Here is an overview of the project:
 
 ```
+.cargo/config.toml
+src/
 .gitignore
 .gitattributes
 AGENTS.md
+Cargo.toml
+Cargo.lock
+IDEA.md            # Design decisions and proposals
 LICENSE
 README.md
+```
+
+## Validation
+
+Validate changes with:
+
+```sh
+cargo fmt -q   # Format changes direcly instead of checking first and then fixing formatting issues.
+cargo clippy -q --all-targets -- -D warnings
+cargo test -q
 ```
 
 ## Commits & Pull Requests
