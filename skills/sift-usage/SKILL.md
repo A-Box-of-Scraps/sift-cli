@@ -1,8 +1,6 @@
 ---
 name: sift-usage
-description: >-
-  Guide to exploring a workspace with Sift, a CLI that indexes files and returns
-  ranked excerpts. Use when discovering relevant code or documentation.
+description: Guide to exploring a workspace with Sift, a CLI that indexes files and returns ranked excerpts. Use when discovering relevant code or documentation.
 ---
 
 # Sift
@@ -48,8 +46,8 @@ Discovery skips hidden and ignored entries by default:
 - `--no-gitignore` disables `.gitignore` and `.git/info/exclude` rules, but still respects `.ignore`.
 - `--no-ignore` disables all supported ignore files.
 
-Neither ignore option includes hidden entries automatically. Explicit files
-bypass hidden and ignore filters; directories and globs do not.
+Neither ignore option includes hidden entries automatically.
+Explicit files bypass hidden and ignore filters; directories and globs do not.
 
 ### File lists and text streams
 
