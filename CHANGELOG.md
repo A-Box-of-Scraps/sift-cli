@@ -1,0 +1,18 @@
+# Changelog
+
+## [Unreleased]
+
+### Added
+
+- File indexing and relevance-ranked queries for coding agents.
+- Snapshot lifecycle management and multi-root extension.
+- Regression tests and relevance and performance benchmarks.
+- GitHub Actions CI and release workflows.
+
+### Fixed
+
+- Hardened CLI terminal output.
+
+### Documentation
+
+- Organized documentation using Diataxis.
