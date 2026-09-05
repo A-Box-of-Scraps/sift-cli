@@ -121,10 +121,7 @@ fn run(cli: Cli) -> sift::Result<()> {
                 "sift: indexed {} documents",
                 handle.info()?.file_count
             );
-            let mut stdout = std::io::stdout().lock();
-            stdout.write_all(handle.as_path().as_os_str().as_encoded_bytes())?;
-            stdout.write_all(b"\n")?;
-            return Ok(());
+            return output::handle(handle.as_path());
         }
         Command::Query {
             handle,
@@ -234,7 +231,11 @@ fn main() -> ExitCode {
     match run(Cli::parse()) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            let _ = writeln!(std::io::stderr().lock(), "sift: {error}");
+            let _ = writeln!(
+                std::io::stderr().lock(),
+                "sift: {}",
+                output::terminal_text(&error.to_string(), false)
+            );
             if matches!(error, sift::Error::InvalidOptions(_)) {
                 ExitCode::from(2)
             } else {

@@ -19,13 +19,13 @@ pub fn query(response: &QueryResponse, json: bool) -> sift::Result<String> {
         writeln!(
             output,
             "{}:{}:{}-{}",
-            result.root_name,
+            result.root_name.escape_default(),
             result.path.escape_default(),
             result.start_line,
             result.end_line
         )
         .unwrap();
-        output.push_str(&result.snippet);
+        output.push_str(&terminal_text(&result.snippet, true));
         if !output.ends_with('\n') {
             output.push('\n');
         }
@@ -36,11 +36,11 @@ pub fn query(response: &QueryResponse, json: bool) -> sift::Result<String> {
 pub fn info(info: &SnapshotInfo) -> String {
     let mut output = format!(
         "id: {}\nbackend: {}\nformat: {}\ncreated_at_unix_seconds: {}\npreprocessing: {}\nfiles: {}\nchunks: {}\n",
-        info.id,
-        info.backend,
+        info.id.escape_default(),
+        info.backend.escape_default(),
         info.format_version,
         info.created_at_unix_seconds,
-        info.preprocessing_config,
+        info.preprocessing_config.escape_default(),
         info.file_count,
         info.chunk_count,
     );
@@ -48,11 +48,35 @@ pub fn info(info: &SnapshotInfo) -> String {
         writeln!(
             output,
             "root: {} ({}) {}",
-            root.name,
-            root.id,
-            root.location.display()
+            root.name.escape_default(),
+            root.id.escape_default(),
+            root.location.to_string_lossy().escape_default()
         )
         .unwrap();
     }
     output
+}
+
+pub fn terminal_text(text: &str, multiline: bool) -> String {
+    let mut output = String::new();
+    for character in text.chars() {
+        if multiline && matches!(character, '\n' | '\t') {
+            output.push(character);
+        } else {
+            output.extend(character.escape_debug());
+        }
+    }
+    output
+}
+
+pub fn handle(path: &std::path::Path) -> sift::Result<()> {
+    use std::io::{IsTerminal, Write};
+    let mut stdout = std::io::stdout().lock();
+    if stdout.is_terminal() {
+        write!(stdout, "{}", path.to_string_lossy().escape_default())?;
+    } else {
+        stdout.write_all(path.as_os_str().as_encoded_bytes())?;
+    }
+    stdout.write_all(b"\n")?;
+    Ok(())
 }
