@@ -2,6 +2,12 @@ use std::path::PathBuf;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("invalid invocation: {0}")]
+    InvalidOptions(String),
+    #[error("cannot index {path}: {reason}")]
+    Input { path: PathBuf, reason: String },
+    #[error("snapshot contains metadata only; build a searchable snapshot with sift index")]
+    NotSearchable,
     #[error("cannot resolve data directory: provide an absolute XDG_DATA_HOME or HOME")]
     MissingDataDirectory,
     #[error("invalid snapshot handle: {0}")]

@@ -6,7 +6,10 @@ use std::{
 
 use uuid::Uuid;
 
-use crate::{Error, Result, backend::sqlite, data_directory};
+use crate::{
+    Error, IndexRequest, QueryResponse, Result, RootInfo, SearchQuery, backend::sqlite, chunk,
+    data_directory, input,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SnapshotHandle(PathBuf);
@@ -45,6 +48,18 @@ impl SnapshotHandle {
         }
         Ok(info)
     }
+
+    pub fn query(&self, query: &SearchQuery) -> Result<QueryResponse> {
+        let prepared = query.prepare()?;
+        if self.info()?.format_version == 1 {
+            return Err(Error::NotSearchable);
+        }
+        Ok(QueryResponse {
+            schema_version: 1,
+            handle: self.0.clone(),
+            results: sqlite::query(&self.0.join("db.sqlite"), &prepared)?,
+        })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -54,6 +69,9 @@ pub struct SnapshotInfo {
     pub backend: String,
     pub format_version: u32,
     pub preprocessing_config: String,
+    pub roots: Vec<RootInfo>,
+    pub file_count: usize,
+    pub chunk_count: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -77,16 +95,28 @@ impl SnapshotStore {
         )?)
     }
 
-    // Metadata only, not a searchable index. Publication requires Linux.
-    // Process termination may leave staging behind; atomic publication does not
-    // guarantee power-loss durability.
+    // Retained for metadata-only format-one artifacts, not file indexing.
     pub fn create_snapshot(&self) -> Result<SnapshotHandle> {
-        self.create_with(Uuid::new_v4(), sqlite::create)
+        self.create_with(Uuid::new_v4(), 1, "none", sqlite::create)
     }
 
+    pub fn index(&self, request: &IndexRequest) -> Result<SnapshotHandle> {
+        let selected = input::select(request)?;
+        self.create_with(
+            Uuid::new_v4(),
+            sqlite::FORMAT_VERSION,
+            chunk::PREPROCESSING_CONFIG,
+            |path, info| sqlite::index(path, info, &selected),
+        )
+    }
+
+    // Linux publication is atomic, not power-loss durable. Process termination
+    // may leave an unpublished staging directory behind.
     fn create_with(
         &self,
         id: Uuid,
+        format_version: u32,
+        preprocessing_config: &str,
         initialize: impl FnOnce(&Path, &SnapshotInfo) -> Result<()>,
     ) -> Result<SnapshotHandle> {
         let indexes = self.directory.join("indexes");
@@ -116,8 +146,11 @@ impl SnapshotStore {
                 .try_into()
                 .map_err(|_| Error::InvalidMetadata("creation timestamp out of range".into()))?,
             backend: sqlite::BACKEND.into(),
-            format_version: sqlite::FORMAT_VERSION,
-            preprocessing_config: "none".into(),
+            format_version,
+            preprocessing_config: preprocessing_config.into(),
+            roots: Vec::new(),
+            file_count: 0,
+            chunk_count: 0,
         };
         initialize(&staging.path().join("db.sqlite"), &info)?;
         // Reject sidecars: published databases must be self-contained.
@@ -162,7 +195,7 @@ mod tests {
     fn failure_cleans_staging_and_does_not_publish() {
         let temporary = tempfile::tempdir().unwrap();
         let store = SnapshotStore::new(temporary.path()).unwrap();
-        let result = store.create_with(Uuid::new_v4(), |path, _| {
+        let result = store.create_with(Uuid::new_v4(), 1, "none", |path, _| {
             fs::write(path, b"partial database")?;
             Err(Error::InvalidMetadata("injected failure".into()))
         });
@@ -180,10 +213,10 @@ mod tests {
         let temporary = tempfile::tempdir().unwrap();
         let store = SnapshotStore::new(temporary.path()).unwrap();
         let id = Uuid::new_v4();
-        let handle = store.create_with(id, sqlite::create).unwrap();
+        let handle = store.create_with(id, 1, "none", sqlite::create).unwrap();
         let before = fs::read(handle.as_path().join("db.sqlite")).unwrap();
         assert!(matches!(
-            store.create_with(id, sqlite::create),
+            store.create_with(id, 1, "none", sqlite::create),
             Err(Error::AlreadyExists(_))
         ));
         assert_eq!(
