@@ -9,8 +9,9 @@ ignore controls, NUL-separated file lists, anonymous and typed documents, and
 `index`, `query`, and `info` commands.
 Queries support `--path`, `--limit`, compact text, and versioned JSON.
 
-Current limits: Linux-only publication, one filesystem root named `default`
-or one synthetic `documents` root, and an 8 MiB per-document cap. Invalid UTF-8,
+Current limits: Linux-only publication, no root rebinding, and an 8 MiB
+per-document cap. Named filesystem roots and synthetic documents can coexist
+through independent snapshot extension. Invalid UTF-8,
 NUL-containing files, and symlinks fail explicit indexing or are skipped during
 discovery. See `INPUTS.md` for discovery, adapter, and error behavior. Chunking
 uses 32 lines, 4 overlap lines, and a 2048-byte cap.
@@ -63,21 +64,23 @@ the warmed reference result is not a cold-cache or real-repository guarantee.
 
 ## 3. Snapshot lifecycle and roots
 
-- [ ] Add `delete <handle>` with ownership/path validation that prevents
+Implemented behavior and support limits: `LIFECYCLE.md`.
+
+- [x] Add `delete <handle>` with ownership/path validation that prevents
   arbitrary directory deletion. Define behavior with concurrent readers.
-- [ ] Define retention, abandoned-staging cleanup, and storage reclamation.
-- [ ] Add named roots and multiple roots per snapshot, with explicit conflict
+- [x] Define retention, abandoned-staging cleanup, and storage reclamation.
+- [x] Add named roots and multiple roots per snapshot, with explicit conflict
   handling and a query-side `--root <name>` filter.
-- [ ] Specify root identity and relocation/rebinding rules before extension.
+- [x] Specify root identity and relocation/rebinding rules before extension.
   Do not merge unrelated sources merely because their relative paths match.
-- [ ] Add `index ... --extend <handle>` by building a new independent snapshot:
+- [x] Add `index ... --extend <handle>` by building a new independent snapshot:
   unchanged sources are skipped, changed sources are replaced, new sources are
   added, and sources absent from extension inputs are retained.
-- [ ] Test failed/interrupted extension and independent parallel extensions;
+- [x] Test failed/interrupted extension and independent parallel extensions;
   original handles must remain unchanged and queryable.
-- [ ] Add explicit staleness checks using stored hashes. Keep query excerpts
+- [x] Add explicit staleness checks using stored hashes. Keep query excerpts
   tied to indexed content rather than silently reading current source text.
-- [ ] Define artifact portability, supported format compatibility, and safe
+- [x] Define artifact portability, supported format compatibility, and safe
   publication on other platforms. Test crash recovery and specify whether
   power-loss durability is a supported guarantee.
 

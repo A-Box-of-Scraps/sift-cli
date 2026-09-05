@@ -35,6 +35,10 @@ enum Command {
             help = "Disable all root-local ignore files (does not include hidden files)"
         )]
         no_ignore: bool,
+        #[arg(long, default_value = "default", conflicts_with = "stdin")]
+        root_name: String,
+        #[arg(long, conflicts_with = "stdin")]
+        extend: Option<PathBuf>,
         #[arg(long, help = "Disable .gitignore and .git/info/exclude rules only")]
         no_gitignore: bool,
         #[arg(long, help = "Include hidden entries during discovery")]
@@ -63,9 +67,20 @@ enum Command {
         path: Option<String>,
         #[arg(long)]
         json: bool,
+        #[arg(long)]
+        root: Option<String>,
     },
     #[command(about = "Read metadata from an explicit snapshot directory.")]
-    Info { handle: PathBuf },
+    Info {
+        handle: PathBuf,
+    },
+    Delete {
+        handle: PathBuf,
+    },
+    Cleanup,
+    Check {
+        handle: PathBuf,
+    },
 }
 
 fn run(cli: Cli) -> sift::Result<()> {
@@ -74,6 +89,8 @@ fn run(cli: Cli) -> sift::Result<()> {
             mut files,
             root,
             no_ignore,
+            root_name,
+            extend,
             no_gitignore,
             hidden,
             files0_from,
@@ -89,12 +106,14 @@ fn run(cli: Cli) -> sift::Result<()> {
                     read_file_list(&root, &mut files)?;
                 }
                 let request = IndexRequest { root, files };
-                store.index_with_options(
-                    &request,
+                let base = extend.map(SnapshotHandle::from_path).transpose()?;
+                store.index_roots(
+                    &[(root_name, request)],
                     &sift::DiscoveryOptions {
                         ignore: ignore_mode(no_ignore, no_gitignore),
                         hidden,
                     },
+                    base.as_ref(),
                 )?
             };
             let _ = writeln!(
@@ -113,18 +132,33 @@ fn run(cli: Cli) -> sift::Result<()> {
             limit,
             path,
             json,
+            root,
         } => {
             let response = SnapshotHandle::from_path(handle)?.query(&SearchQuery {
                 text: query,
                 limit,
                 path,
+                root,
             })?;
             output::query(&response, json)?
         }
-        Command::Info { handle } => {
-            let info = SnapshotHandle::from_path(handle)?.info()?;
-            output::info(&info)
+        Command::Delete { handle } => {
+            SnapshotStore::from_environment()?.delete(&SnapshotHandle::from_path(handle)?)?;
+            String::new()
         }
+        Command::Cleanup => format!(
+            "{}\n",
+            SnapshotStore::from_environment()?.cleanup_staging()?
+        ),
+        Command::Check { handle } => {
+            let statuses = SnapshotHandle::from_path(handle)?.check_staleness()?;
+            format!(
+                "{}\n",
+                serde_json::to_string(&statuses)
+                    .map_err(|e| sift::Error::InvalidMetadata(e.to_string()))?
+            )
+        }
+        Command::Info { handle } => output::info(&SnapshotHandle::from_path(handle)?.info()?),
     };
     std::io::stdout().lock().write_all(output.as_bytes())?;
     Ok(())

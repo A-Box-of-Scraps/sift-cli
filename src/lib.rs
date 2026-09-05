@@ -14,4 +14,4 @@ pub use error::{Error, Result};
 pub use input::{DiscoveryOptions, IgnoreMode, IndexRequest, MAX_FILE_BYTES};
 pub use paths::data_directory;
 pub use query::{QueryResponse, SearchQuery, SearchResult};
-pub use snapshot::{SnapshotHandle, SnapshotInfo, SnapshotStore};
+pub use snapshot::{SnapshotHandle, SnapshotInfo, SnapshotStore, SourceStatus};

@@ -9,6 +9,7 @@ pub struct SearchQuery {
     pub text: String,
     pub limit: usize,
     pub path: Option<String>,
+    pub root: Option<String>,
 }
 
 impl SearchQuery {
@@ -17,6 +18,7 @@ impl SearchQuery {
             text: text.into(),
             limit: 5,
             path: None,
+            root: None,
         }
     }
 
@@ -48,6 +50,7 @@ impl SearchQuery {
             terms: terms.into_iter().collect(),
             limit: self.limit,
             path,
+            root: self.root.clone(),
         })
     }
 }
@@ -70,6 +73,7 @@ pub(crate) struct PreparedQuery {
     pub terms: Vec<String>,
     pub limit: usize,
     pub path: Option<String>,
+    pub root: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
