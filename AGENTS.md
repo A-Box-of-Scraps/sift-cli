@@ -10,6 +10,7 @@ Here is an overview of the project:
 ```
 .cargo/config.toml
 src/
+tests/
 .gitignore
 .gitattributes
 AGENTS.md
@@ -19,6 +20,10 @@ IDEA.md            # Design decisions and proposals
 LICENSE
 README.md
 ```
+
+## Development
+
+- Do not add comments unless they explain unexpected or complex behavior, or when documentation is explicitly requested by the user. In all cases, keep them concise.
 
 ## Validation
 

@@ -7,3 +7,11 @@ description = "Google Maps for your workspace, in the terminal."
 repository = "https://github.com/A-Box-of-Scraps/sift-cli"
 
 [dependencies]
+clap = { version = "4.6.6", features = ["derive"] }
+rusqlite = { version = "0.40.2", features = ["bundled"] }
+tempfile = "3.27.0"
+thiserror = "2.0.20"
+uuid = { version = "1.26.0", features = ["v4"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rustix = { version = "1.1.4", features = ["fs"] }
