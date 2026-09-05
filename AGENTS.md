@@ -7,7 +7,6 @@ Its goal is to serve a similar discovery role to rg (content search) while retur
 
 Here is an overview of the project:
 
-
 ```
 .gitignore
 .gitattributes
