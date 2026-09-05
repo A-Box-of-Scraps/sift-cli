@@ -61,8 +61,7 @@ handle=$(rg -l -0 'TODO' | sift index --files0-from -)
 Use `--stdin` for a single text document:
 
 ```sh
-handle=$(printf 'Token validation rejects empty tokens.\n' |
-  sift index --stdin --name notes)
+handle=$(printf 'Token validation rejects empty tokens.\n' | sift index --stdin --name notes)
 ```
 
 This creates one anonymous document. Concatenating files into stdin loses their individual paths, and line numbers refer to the combined stream.
@@ -71,8 +70,7 @@ Do not combine `--stdin` with file inputs or extension.
 For generated sources, index the output directory after generation succeeds:
 
 ```sh
-cfr app.jar --outputdir /tmp/decompiled &&
-handle=$(sift index --root /tmp/decompiled .)
+cfr app.jar --outputdir /tmp/decompiled && handle=$(sift index --root /tmp/decompiled .)
 ```
 
 Each indexing example creates a separate snapshot. Keep its handle if you want to query or delete it later.
