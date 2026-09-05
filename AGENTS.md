@@ -16,7 +16,8 @@ tests/
 AGENTS.md
 Cargo.toml
 Cargo.lock
-IDEA.md            # Design decisions and proposals
+docs/IDEA.md       # Design decisions and proposals
+docs/TODO.MD       # Remaining work
 LICENSE
 README.md
 ```
