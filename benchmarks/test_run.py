@@ -35,6 +35,16 @@ class EvaluationTests(unittest.TestCase):
         self.assertNotEqual(schedule, queries * 5)
         self.assertEqual(run.query_schedule([], 5), [])
 
+    def test_reference_requires_named_machine_conditions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'reference.json'
+            path.write_text('{}')
+            with self.assertRaises(ValueError):
+                run.reference_notes(path)
+            notes = {key: 'recorded' for key in ('name', 'storage', 'power_mode', 'workloads')}
+            path.write_text(json.dumps(notes))
+            self.assertEqual(run.reference_notes(path), notes)
+
     def test_percentiles(self):
         result = run.summary([{'seconds': i, 'peak_rss_kib': i} for i in range(1, 21)])
         self.assertEqual(result['p50_seconds'], 10)
@@ -74,6 +84,103 @@ class EvaluationTests(unittest.TestCase):
             self.assertEqual(second[-2:], ['--repetitions', '12'])
             commands = json.loads((args.output / 'profile-queries.json').read_text())
             self.assertEqual(commands, [['/bin/sift', 'query', '/handle', 'a b']])
+
+
+
+class ExperimentTests(unittest.TestCase):
+    def test_diagnostic_tokens_and_boosts(self):
+        import experiments
+        self.assertEqual(experiments.terms('HTTPServer snake_case'),
+                         ['case', 'http', 'httpserver', 'server', 'snake', 'snake_case'])
+        candidates = [{'path': 'partial', 'snippet': 'rotate session token'},
+                      {'path': 'exact', 'snippet': 'rotate_session_token'}]
+        self.assertEqual(experiments.rerank(candidates, 'rotate_session_token', 'identifier')[0]['path'], 'exact')
+        self.assertEqual(experiments.rerank(candidates, 'rotate session token', 'phrase')[0]['path'], 'partial')
+        self.assertEqual(len(experiments.rerank(candidates, 'please show me', 'filler')), 2)
+
+    def test_diversity_metrics(self):
+        results = [{'path': 'a', 'snippet': 'a b c'}, {'path': 'b', 'snippet': 'a b c'},
+                   {'path': 'b', 'snippet': 'different'}]
+        self.assertEqual(run.diversity(results), {'near_duplicate_pairs_at_10': 1, 'max_hits_per_file_at_10': 2})
+        self.assertEqual(run.diversity([])['max_hits_per_file_at_10'], 0)
+
+    def test_variants_update_source_and_metadata_together(self):
+        import experiments
+        import shutil
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)
+            shutil.copytree(run.ROOT / 'src', source / 'src')
+            experiments.configure(source, {'lines': 16, 'overlap': 2, 'bytes': 1024,
+                                          'candidates': 50, 'weight': 6.0, 'diversity': False})
+            chunk = (source / 'src/chunk.rs').read_text()
+            self.assertIn('lines=16;overlap=2;max_bytes=1024', chunk)
+            self.assertIn('WINDOW_LINES: usize = 16', chunk)
+            backend = (source / 'src/backend/sqlite.rs').read_text()
+            self.assertIn('query.limit * 50', backend)
+            self.assertIn('bm25(chunk_search, 6.0, 1.0)', backend)
+            self.assertIn('if false && repeated_file', (source / 'src/query.rs').read_text())
+
+    def test_legacy_variant_restores_streaming_unbounded_query(self):
+        import experiments
+        import shutil
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory)
+            shutil.copytree(run.ROOT / 'src', source / 'src')
+            experiments.configure(source, {'legacy': True})
+            backend = (source / 'src/backend/sqlite.rs').read_text()
+            self.assertNotIn('LIMIT ?3', backend)
+            self.assertNotIn('Ok(query::select', backend)
+            self.assertIn('for candidate in candidates', backend)
+
+
+class CacheProtocolTests(unittest.TestCase):
+    def test_warmup_is_not_a_sample(self):
+        with patch.object(run, 'run', return_value=(b'/snapshot\n', {'seconds': 1})) as execute:
+            handle, samples = run.measure_index('/bin/sift', '/corpus', {}, 3, None)
+        self.assertEqual(handle, Path('/snapshot'))
+        self.assertEqual(len(samples), 3)
+        self.assertEqual(execute.call_count, 4)
+
+    def test_eviction_precedes_every_index_sample_without_shell(self):
+        with patch.object(run, 'run', return_value=(b'/snapshot\n', {'seconds': 1})) as execute:
+            _, samples = run.measure_index('/bin/sift', '/corpus', {}, 2, '/helper "argument with spaces"')
+        self.assertEqual(len(samples), 2)
+        self.assertEqual([c.args[0][0] for c in execute.call_args_list],
+                         ['/helper', '/bin/sift', '/helper', '/bin/sift'])
+        self.assertEqual(execute.call_args_list[0].args[0], ['/helper', 'argument with spaces'])
+
+    def test_eviction_failure_aborts(self):
+        with patch.object(run, 'run', side_effect=RuntimeError('eviction failed')):
+            with self.assertRaises(RuntimeError):
+                run.measure_index('/bin/sift', '/corpus', {}, 1, '/helper')
+
+
+class MeasurementTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.temporary = tempfile.TemporaryDirectory()
+        cls.binary = Path(cls.temporary.name) / 'measure'
+        run.run(['clang', '-O2', '-Wall', '-Wextra', '-Werror',
+                 str(run.ROOT / 'benchmarks/measure.c'), '-o', str(cls.binary)])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.temporary.cleanup()
+
+    def test_rss_does_not_include_python_driver_heap(self):
+        heap = bytearray(64 * 1024 * 1024)
+        with patch.object(run, 'MEASURE', self.binary):
+            stdout, sample = run.run([sys.executable, '-c', 'print("measured")'])
+        self.assertEqual(stdout, b'measured\n')
+        self.assertGreater(sample['seconds'], 0)
+        self.assertLess(sample['peak_rss_kib'], len(heap) // 1024)
+
+    def test_status_and_capture_are_preserved(self):
+        with patch.object(run, 'MEASURE', self.binary):
+            output, _ = run.run([sys.executable, '-c', 'print("miss"); exit(1)'], allowed=(1,))
+            self.assertEqual(output, b'miss\n')
+            with self.assertRaises(RuntimeError):
+                run.run([sys.executable, '-c', 'raise SystemExit(2)'])
 
 
 if __name__ == '__main__':

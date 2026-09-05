@@ -210,31 +210,23 @@ pub(crate) fn query(path: &Path, query: &PreparedQuery) -> Result<Vec<SearchResu
          JOIN roots r ON r.id = f.root_id
          WHERE chunk_search MATCH ?1
            AND (?2 IS NULL OR f.path = ?2 OR substr(f.path, 1, length(?2) + 1) = ?2 || '/')
-         ORDER BY bm25(chunk_search, 3.0, 1.0), c.id",
+         ORDER BY bm25(chunk_search, 3.0, 1.0), c.id LIMIT ?3",
     )?;
-    let candidates = statement.query_map(params![expression, query.path], |row| {
-        Ok(SearchResult {
-            id: format!("chunk-{}", row.get::<_, i64>(0)?),
-            root_id: row.get(1)?,
-            root_name: row.get(2)?,
-            path: row.get(3)?,
-            start_line: row.get(4)?,
-            end_line: row.get(5)?,
-            start_byte: row.get(6)?,
-            end_byte: row.get(7)?,
-            snippet: row.get(8)?,
-            truncated: false,
-        })
-    })?;
-    let mut results = Vec::new();
-    for candidate in candidates {
-        let candidate = candidate?;
-        if !query::overlaps(&candidate, &results) {
-            results.push(candidate);
-            if results.len() == query.limit {
-                break;
-            }
-        }
-    }
-    Ok(results)
+    let candidates =
+        statement.query_map(params![expression, query.path, query.limit * 10], |row| {
+            Ok(SearchResult {
+                id: format!("chunk-{}", row.get::<_, i64>(0)?),
+                root_id: row.get(1)?,
+                root_name: row.get(2)?,
+                path: row.get(3)?,
+                start_line: row.get(4)?,
+                end_line: row.get(5)?,
+                start_byte: row.get(6)?,
+                end_byte: row.get(7)?,
+                snippet: row.get(8)?,
+                truncated: false,
+            })
+        })?;
+    let candidates = candidates.collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(query::select(candidates, query.limit))
 }

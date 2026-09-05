@@ -128,5 +128,68 @@
         "line": 2
       }
     ]
+  },
+  {
+    "category": "diversity",
+    "query": "cache_refresh_task",
+    "expected": [
+      {
+        "path": "diversity/primary.rs",
+        "line": 1
+      },
+      {
+        "path": "diversity/scheduler.py",
+        "line": 1
+      },
+      {
+        "path": "diversity/monitor.go",
+        "line": 1
+      }
+    ]
+  },
+  {
+    "category": "coverage",
+    "query": "retry attempts scheduling requests",
+    "expected": [
+      {
+        "path": "network/retry_metrics.py",
+        "line": 2
+      }
+    ]
+  },
+  {
+    "category": "identifier-partial",
+    "query": "rotate_session_token_missing",
+    "expected": [
+      {
+        "path": "auth/session.rs",
+        "line": 1
+      }
+    ],
+    "note": "Whole identifier is absent; component fallback is intentionally relevant, not an exact match."
+  },
+  {
+    "category": "phrase",
+    "query": "shared refresh queue worker",
+    "expected": [
+      {
+        "path": "diversity/primary.rs",
+        "line": 1
+      }
+    ]
+  },
+  {
+    "category": "filler",
+    "query": "please show me cache_refresh_task",
+    "expected": [
+      {
+        "path": "diversity/scheduler.py",
+        "line": 1
+      },
+      {
+        "path": "diversity/monitor.go",
+        "line": 1
+      }
+    ]
   }
 ]

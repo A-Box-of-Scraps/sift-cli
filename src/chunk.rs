@@ -42,7 +42,10 @@ pub fn chunk_text(text: &str) -> Vec<Chunk<'_>> {
         if end == text.len() {
             break;
         }
-        let overlap = line_starts[last_line.saturating_sub(OVERLAP_LINES)];
+        let overlap = line_starts
+            .get(last_line.saturating_sub(OVERLAP_LINES))
+            .copied()
+            .unwrap_or(end);
         start = if overlap > start && overlap < end {
             overlap
         } else {

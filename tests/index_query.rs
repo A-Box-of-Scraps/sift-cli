@@ -466,3 +466,36 @@ fn cli_root_override_and_failed_index_output() {
     let missing_args = fixture.cli().arg("index").output().unwrap();
     assert_eq!(missing_args.status.code(), Some(2));
 }
+
+#[test]
+fn repeated_excerpts_leave_room_for_other_implementations() {
+    let fixture = Fixture::new();
+    fixture.write(
+        "primary.rs",
+        include_str!("../benchmarks/corpus/diversity/primary.rs"),
+    );
+    fixture.write(
+        "replica.rs",
+        include_str!("../benchmarks/corpus/diversity/replica_a.rs"),
+    );
+    fixture.write(
+        "scheduler.py",
+        include_str!("../benchmarks/corpus/diversity/scheduler.py"),
+    );
+    fixture.write(
+        "monitor.go",
+        include_str!("../benchmarks/corpus/diversity/monitor.go"),
+    );
+    let handle = fixture
+        .index(&["primary.rs", "replica.rs", "scheduler.py", "monitor.go"])
+        .unwrap();
+    let mut query = SearchQuery::new("cache_refresh_task");
+    query.limit = 3;
+    let results = handle.query(&query).unwrap().results;
+    assert!(results.iter().any(|result| result.path == "scheduler.py"));
+    assert!(results.iter().any(|result| result.path == "monitor.go"));
+    query.path = Some("primary.rs".into());
+    let results = handle.query(&query).unwrap().results;
+    assert_eq!(results.len(), 3);
+    assert!(results.iter().all(|result| result.path == "primary.rs"));
+}

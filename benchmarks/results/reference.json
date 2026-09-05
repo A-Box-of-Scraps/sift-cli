@@ -1,0 +1,8 @@
+{
+  "name": "local-linux-warm-synthetic",
+  "storage": "Samsung SSD 9100 PRO 2TB, NVMe; dm-crypt root on btrfs",
+  "power_mode": "cpu0 scaling_governor=performance; no platform_profile exposed",
+  "workloads": "Interactive development host; no workload isolation or CPU pinning. Background activity uncontrolled.",
+  "cache_protocol": "One complete index warmup; each query explicitly warmed. No privileged cache eviction. No cold-cache claim.",
+  "goal": "For this synthetic input only: warmed process-to-published-index p95 <= 5 seconds for at least 100000 lines. Cold-cache and real-project performance are not assessed."
+}

@@ -101,3 +101,112 @@ pub(crate) fn overlaps(candidate: &SearchResult, results: &[SearchResult]) -> bo
             && candidate.start_byte < result.end_byte
     })
 }
+
+pub(crate) fn select(candidates: Vec<SearchResult>, limit: usize) -> Vec<SearchResult> {
+    let mut results = Vec::new();
+    let mut deferred = Vec::new();
+    for candidate in candidates {
+        if overlaps(&candidate, &results) {
+            continue;
+        }
+        let repeated_file = results
+            .iter()
+            .filter(|result: &&SearchResult| {
+                result.root_id == candidate.root_id && result.path == candidate.path
+            })
+            .count()
+            >= 2;
+        if repeated_file
+            || results
+                .iter()
+                .any(|result| near_duplicate(&candidate.snippet, &result.snippet))
+        {
+            deferred.push(candidate);
+        } else {
+            results.push(candidate);
+            if results.len() == limit {
+                return results;
+            }
+        }
+    }
+    for candidate in deferred {
+        if !overlaps(&candidate, &results) {
+            results.push(candidate);
+            if results.len() == limit {
+                break;
+            }
+        }
+    }
+    results
+}
+
+fn near_duplicate(left: &str, right: &str) -> bool {
+    let tokens = |text: &str| -> BTreeSet<String> {
+        text.split_whitespace().map(str::to_lowercase).collect()
+    };
+    let left = tokens(left);
+    let right = tokens(right);
+    let union = left.union(&right).count();
+    union > 0 && left.intersection(&right).count() * 100 >= union * 85
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn hit(root: &str, path: &str, start: usize, snippet: &str) -> SearchResult {
+        SearchResult {
+            id: format!("{root}-{path}-{start}"),
+            root_id: root.into(),
+            root_name: root.into(),
+            path: path.into(),
+            start_line: start + 1,
+            end_line: start + 10,
+            start_byte: start,
+            end_byte: start + 10,
+            snippet: snippet.into(),
+            truncated: false,
+        }
+    }
+
+    #[test]
+    fn similar_excerpts_are_deferred_but_remain_available() {
+        let candidates = vec![
+            hit("a", "first", 0, "one two three four five six seven"),
+            hit("a", "copy", 0, "one two three four five six seven eight"),
+            hit("a", "other", 0, "different implementation"),
+        ];
+        let results = select(candidates.clone(), 2);
+        assert_eq!(results[1].path, "other");
+        assert_eq!(select(candidates, 3)[2].path, "copy");
+        assert!(!near_duplicate("", ""));
+        assert!(near_duplicate(" A  b\n", "a b"));
+    }
+
+    #[test]
+    fn file_quota_is_soft_and_root_scoped() {
+        let candidates = vec![
+            hit("a", "same", 0, "first"),
+            hit("a", "same", 20, "second"),
+            hit("a", "same", 40, "third"),
+            hit("b", "same", 0, "fourth"),
+        ];
+        let results = select(candidates.clone(), 3);
+        assert_eq!(results[2].root_id, "b");
+        assert_eq!(select(candidates, 4)[3].snippet, "third");
+    }
+
+    #[test]
+    fn deferred_excerpts_do_not_overlap_later_selections() {
+        let results = select(
+            vec![
+                hit("a", "first", 0, "copy"),
+                hit("a", "second", 0, "copy"),
+                hit("a", "second", 5, "different"),
+            ],
+            3,
+        );
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[1].start_byte, 5);
+    }
+}

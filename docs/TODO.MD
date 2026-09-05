@@ -41,23 +41,24 @@ including completed input adapters.
 
 Evaluation driver and protocol: `benchmarks/run.py` and `BENCHMARKS.md`. Optional
 `--flamegraphs` emits indexing and repeated-query SVGs separately from timings.
-The initial corpus is synthetic; reference-machine/cold-cache claims and tuning
-experiments remain open.
+Reference measurements, isolated tuning experiments, and decisions are recorded
+in `EVALUATION.md` and `benchmarks/results/section2.json`. The corpus is synthetic;
+the warmed reference result is not a cold-cache or real-repository guarantee.
 
 - [x] Build a mixed-language relevance corpus with expected locations for
   identifier, path, error-message, keyword, and natural-language queries.
 - [x] Measure top-5/top-10 retrieval and output size against rg for exact
   discovery and an unboosted lexical baseline.
-- [ ] Define reference hardware, input bytes/files/lines, and cold/warm cache
+- [x] Define reference hardware, input bytes/files/lines, and cold/warm cache
   conditions before assessing the 100,000-line indexing goal.
 - [x] Benchmark process-to-published-index time, query startup, p50/p95 query
   latency, peak memory, and database size using release builds.
-- [ ] Evaluate query coverage, exact identifier and phrase boosts, and handling
+- [x] Evaluate query coverage, exact identifier and phrase boosts, and handling
   of conversational filler. Current OR-connected components can match related
   identifiers even when the whole identifier is absent.
-- [ ] Improve result diversity beyond byte-overlap suppression, including
+- [x] Improve result diversity beyond byte-overlap suppression, including
   near-duplicate excerpts and repeated hits from one file.
-- [ ] Benchmark chunk sizes, overlap, field weights, and candidate-selection
+- [x] Benchmark chunk sizes, overlap, field weights, and candidate-selection
   cost before changing defaults or adding complexity.
 
 ## 3. Snapshot lifecycle and roots
