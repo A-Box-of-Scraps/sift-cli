@@ -137,17 +137,7 @@ impl SnapshotStore {
                     "documents must be NUL-free UTF-8 within 8 MiB".into(),
                 ));
             }
-            let name: String = document
-                .name
-                .bytes()
-                .map(|b| {
-                    if b.is_ascii_alphanumeric() || b"-_.".contains(&b) {
-                        (b as char).to_string()
-                    } else {
-                        format!("%{b:02X}")
-                    }
-                })
-                .collect();
+            let name: String = document.name.bytes().map(encode_name_byte).collect();
             typed.push(crate::Document {
                 root_id: root.id.clone(),
                 path: format!("document:{name}"),
@@ -290,5 +280,13 @@ mod tests {
                 .count(),
             1
         );
+    }
+}
+
+fn encode_name_byte(byte: u8) -> String {
+    if byte.is_ascii_alphanumeric() || b"-_.".contains(&byte) {
+        (byte as char).to_string()
+    } else {
+        format!("%{byte:02X}")
     }
 }

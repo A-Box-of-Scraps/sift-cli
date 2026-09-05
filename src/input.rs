@@ -17,9 +17,21 @@ pub struct IndexRequest {
 
 #[derive(Clone, Debug, Default)]
 pub struct DiscoveryOptions {
-    pub no_ignore: bool,
-    pub no_gitignore: bool,
+    pub ignore: IgnoreMode,
     pub hidden: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum IgnoreMode {
+    #[default]
+    All,
+    WithoutGit,
+    None,
+}
+
+struct Selection {
+    path: PathBuf,
+    glob: Option<globset::GlobMatcher>,
 }
 
 pub(crate) struct SelectedInput {
@@ -62,138 +74,10 @@ pub(crate) fn select(request: &IndexRequest, options: &DiscoveryOptions) -> Resu
     let mut files = BTreeMap::new();
     let mut selections = Vec::new();
     for input in &request.files {
-        let relative = if input.is_absolute() {
-            input
-                .strip_prefix(&root.location)
-                .map_err(|_| invalid(input, "file is outside the selected root"))?
-        } else {
-            input.as_path()
-        };
-        if relative
-            .components()
-            .any(|c| !matches!(c, Component::Normal(_) | Component::CurDir))
-        {
-            return Err(invalid(
-                input,
-                "parent traversal and paths outside the root are not supported",
-            ));
-        }
-        let relative: PathBuf = relative
-            .components()
-            .filter(|c| *c != Component::CurDir)
-            .collect();
-        let text = relative
-            .to_str()
-            .ok_or_else(|| invalid(input, "file path must be UTF-8"))?;
-        let absolute = root.location.join(&relative);
-        if fs::symlink_metadata(&absolute).is_ok() {
-            let mut checked = root.location.clone();
-            for part in relative.components() {
-                checked.push(part);
-                if fs::symlink_metadata(&checked)
-                    .map_err(|e| invalid(input, e))?
-                    .file_type()
-                    .is_symlink()
-                {
-                    return Err(invalid(input, "symlink inputs are not supported"));
-                }
-            }
-            if absolute.is_file() {
-                let logical = relative
-                    .components()
-                    .filter_map(|c| match c {
-                        Component::Normal(n) => n.to_str(),
-                        _ => None,
-                    })
-                    .collect::<Vec<_>>()
-                    .join("/");
-                files.insert(
-                    logical.clone(),
-                    SelectedFile {
-                        absolute,
-                        logical,
-                        explicit: true,
-                    },
-                );
-            } else if absolute.is_dir() {
-                selections.push((relative, None));
-            } else {
-                return Err(invalid(input, "expected a regular file or directory"));
-            }
-        } else if text.contains(['*', '?', '[', '{']) {
-            let matcher = globset::GlobBuilder::new(text)
-                .literal_separator(true)
-                .backslash_escape(false)
-                .build()
-                .map_err(|e| invalid(input, e))?
-                .compile_matcher();
-            selections.push((relative, Some(matcher)));
-        } else {
-            return Err(invalid(input, "input does not exist or cannot be accessed"));
-        }
+        select_input(&root, input, &mut files, &mut selections)?;
     }
     if !selections.is_empty() {
-        let mut matched = vec![false; selections.len()];
-        let mut walker = ignore::WalkBuilder::new(&root.location);
-        walker
-            .hidden(!options.hidden)
-            .follow_links(false)
-            .parents(false)
-            .ignore(!options.no_ignore)
-            .git_ignore(!options.no_ignore && !options.no_gitignore)
-            .git_exclude(!options.no_ignore && !options.no_gitignore)
-            .git_global(false)
-            .require_git(false);
-        for entry in walker.build() {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(e) => {
-                    report_skip(&e.to_string());
-                    continue;
-                }
-            };
-            if let Some(error) = entry.error() {
-                report_skip(&error.to_string());
-            }
-            let relative = entry.path().strip_prefix(&root.location).unwrap();
-            let mut selected = false;
-            for (i, (directory, glob)) in selections.iter().enumerate() {
-                let hit = match glob {
-                    Some(glob) => relative.ancestors().any(|p| glob.is_match(p)),
-                    None => relative.starts_with(directory),
-                };
-                if hit {
-                    matched[i] = true;
-                    selected = true;
-                }
-            }
-            if !selected || entry.file_type().is_some_and(|t| t.is_dir()) {
-                continue;
-            }
-            if !entry.file_type().is_some_and(|t| t.is_file()) {
-                report_skip(&format!(
-                    "{:?}: not a regular file (symlinks disabled)",
-                    entry.path()
-                ));
-                continue;
-            }
-            let Some(logical) = relative.to_str() else {
-                report_skip(&format!("{:?}: file path must be UTF-8", entry.path()));
-                continue;
-            };
-            files
-                .entry(logical.to_owned())
-                .or_insert_with(|| SelectedFile {
-                    absolute: entry.path().to_path_buf(),
-                    logical: logical.to_owned(),
-                    explicit: false,
-                });
-        }
-        for (i, (pattern, glob)) in selections.iter().enumerate() {
-            if glob.is_some() && !matched[i] {
-                return Err(invalid(pattern, "glob matched no visible entries"));
-            }
-        }
+        discover(&root, options, &selections, &mut files)?;
     }
     if files.is_empty() {
         return Err(Error::InvalidOptions("selection contains no files".into()));
@@ -203,6 +87,165 @@ pub(crate) fn select(request: &IndexRequest, options: &DiscoveryOptions) -> Resu
         files: files.into_values().collect(),
         documents: Vec::new(),
     })
+}
+
+fn select_input(
+    root: &RootInfo,
+    input: &Path,
+    files: &mut BTreeMap<String, SelectedFile>,
+    selections: &mut Vec<Selection>,
+) -> Result<()> {
+    let relative = if input.is_absolute() {
+        input
+            .strip_prefix(&root.location)
+            .map_err(|_| invalid(input, "file is outside the selected root"))?
+    } else {
+        input
+    };
+    if relative
+        .components()
+        .any(|c| !matches!(c, Component::Normal(_) | Component::CurDir))
+    {
+        return Err(invalid(
+            input,
+            "parent traversal and paths outside the root are not supported",
+        ));
+    }
+    let relative: PathBuf = relative
+        .components()
+        .filter(|c| *c != Component::CurDir)
+        .collect();
+    let text = relative
+        .to_str()
+        .ok_or_else(|| invalid(input, "file path must be UTF-8"))?;
+    let absolute = root.location.join(&relative);
+    if fs::symlink_metadata(&absolute).is_ok() {
+        reject_symlinks(root, &relative, input)?;
+        if absolute.is_file() {
+            let logical = relative
+                .components()
+                .filter_map(|c| match c {
+                    Component::Normal(n) => n.to_str(),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join("/");
+            files.insert(
+                logical.clone(),
+                SelectedFile {
+                    absolute,
+                    logical,
+                    explicit: true,
+                },
+            );
+        } else if absolute.is_dir() {
+            selections.push(Selection {
+                path: relative,
+                glob: None,
+            });
+        } else {
+            return Err(invalid(input, "expected a regular file or directory"));
+        }
+    } else if text.contains(['*', '?', '[', '{']) {
+        let matcher = globset::GlobBuilder::new(text)
+            .literal_separator(true)
+            .backslash_escape(false)
+            .build()
+            .map_err(|e| invalid(input, e))?
+            .compile_matcher();
+        selections.push(Selection {
+            path: relative,
+            glob: Some(matcher),
+        });
+    } else {
+        return Err(invalid(input, "input does not exist or cannot be accessed"));
+    }
+    Ok(())
+}
+
+fn reject_symlinks(root: &RootInfo, relative: &Path, input: &Path) -> Result<()> {
+    let mut checked = root.location.clone();
+    for part in relative.components() {
+        checked.push(part);
+        if fs::symlink_metadata(&checked)
+            .map_err(|e| invalid(input, e))?
+            .file_type()
+            .is_symlink()
+        {
+            return Err(invalid(input, "symlink inputs are not supported"));
+        }
+    }
+    Ok(())
+}
+
+fn discover(
+    root: &RootInfo,
+    options: &DiscoveryOptions,
+    selections: &[Selection],
+    files: &mut BTreeMap<String, SelectedFile>,
+) -> Result<()> {
+    let mut matched = vec![false; selections.len()];
+    let mut walker = ignore::WalkBuilder::new(&root.location);
+    walker
+        .hidden(!options.hidden)
+        .follow_links(false)
+        .parents(false)
+        .ignore(options.ignore != IgnoreMode::None)
+        .git_ignore(options.ignore == IgnoreMode::All)
+        .git_exclude(options.ignore == IgnoreMode::All)
+        .git_global(false)
+        .require_git(false);
+    for entry in walker.build() {
+        let entry = match entry {
+            Ok(e) => e,
+            Err(e) => {
+                report_skip(&e.to_string());
+                continue;
+            }
+        };
+        if let Some(error) = entry.error() {
+            report_skip(&error.to_string());
+        }
+        let relative = entry.path().strip_prefix(&root.location).unwrap();
+        let mut selected = false;
+        for (i, selection) in selections.iter().enumerate() {
+            let hit = match &selection.glob {
+                Some(glob) => relative.ancestors().any(|p| glob.is_match(p)),
+                None => relative.starts_with(&selection.path),
+            };
+            if hit {
+                matched[i] = true;
+                selected = true;
+            }
+        }
+        if !selected || entry.file_type().is_some_and(|t| t.is_dir()) {
+            continue;
+        }
+        if !entry.file_type().is_some_and(|t| t.is_file()) {
+            report_skip(&format!(
+                "{:?}: not a regular file (symlinks disabled)",
+                entry.path()
+            ));
+            continue;
+        }
+        let Some(logical) = relative.to_str() else {
+            report_skip(&format!("{:?}: file path must be UTF-8", entry.path()));
+            continue;
+        };
+        files
+            .entry(logical.to_owned())
+            .or_insert_with(|| SelectedFile {
+                absolute: entry.path().to_path_buf(),
+                logical: logical.to_owned(),
+                explicit: false,
+            });
+    }
+    for (i, selection) in selections.iter().enumerate() {
+        if selection.glob.is_some() && !matched[i] {
+            return Err(invalid(&selection.path, "glob matched no visible entries"));
+        }
+    }
+    Ok(())
 }
 
 pub(crate) fn report_skip(message: &str) {

@@ -410,6 +410,10 @@ fn cli_round_trip_json_and_filter_ignore_query_working_directory() {
     assert_eq!(payload["results"][0]["snippet"], "validateToken\n");
     assert_eq!(payload["results"][0]["truncated"], false);
     assert!(payload["results"][0].get("score").is_none());
+    assert_empty_and_invalid_queries(&fixture, handle);
+}
+
+fn assert_empty_and_invalid_queries(fixture: &Fixture, handle: &str) {
     let no_results = fixture
         .cli()
         .args(["query", handle, "absentterm", "--json"])

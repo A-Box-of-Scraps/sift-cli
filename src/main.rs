@@ -82,69 +82,17 @@ fn run(cli: Cli) -> sift::Result<()> {
         } => {
             let store = SnapshotStore::from_environment()?;
             let handle = if stdin {
-                let mut bytes = Vec::new();
-                std::io::stdin()
-                    .lock()
-                    .take(sift::MAX_FILE_BYTES + 1)
-                    .read_to_end(&mut bytes)?;
-                if bytes.len() as u64 > sift::MAX_FILE_BYTES {
-                    return Err(sift::Error::InvalidOptions(
-                        "stdin exceeds the 8 MiB limit".into(),
-                    ));
-                }
-                let text = String::from_utf8(bytes)
-                    .map_err(|_| sift::Error::InvalidOptions("stdin is not valid UTF-8".into()))?;
-                store.index_documents(&[sift::TextDocument {
-                    name: name.unwrap_or_else(|| "stdin".into()),
-                    text,
-                }])?
+                index_stdin(&store, name)?
             } else {
                 let root = root.map(Ok).unwrap_or_else(std::env::current_dir)?;
                 if files0_from.is_some() {
-                    use std::io::BufRead;
-                    let mut input = std::io::stdin().lock();
-                    loop {
-                        let mut bytes = Vec::new();
-                        if input.read_until(0, &mut bytes)? == 0 {
-                            break;
-                        }
-                        if bytes.pop() != Some(0) {
-                            return Err(sift::Error::InvalidOptions(
-                                "file list must end with NUL".into(),
-                            ));
-                        }
-                        if bytes.is_empty() {
-                            return Err(sift::Error::InvalidOptions(
-                                "empty file list entry".into(),
-                            ));
-                        }
-                        #[cfg(unix)]
-                        let path: PathBuf = {
-                            use std::os::unix::ffi::OsStringExt;
-                            std::ffi::OsString::from_vec(bytes).into()
-                        };
-                        #[cfg(not(unix))]
-                        let path: PathBuf = String::from_utf8(bytes)
-                            .map_err(|_| {
-                                sift::Error::InvalidOptions("file path must be UTF-8".into())
-                            })?
-                            .into();
-                        let absolute = root.join(&path);
-                        if !std::fs::symlink_metadata(&absolute).is_ok_and(|m| m.is_file()) {
-                            return Err(sift::Error::Input {
-                                path,
-                                reason: "file list entries must name existing regular files".into(),
-                            });
-                        }
-                        files.push(path);
-                    }
+                    read_file_list(&root, &mut files)?;
                 }
                 let request = IndexRequest { root, files };
                 store.index_with_options(
                     &request,
                     &sift::DiscoveryOptions {
-                        no_ignore,
-                        no_gitignore,
+                        ignore: ignore_mode(no_ignore, no_gitignore),
                         hidden,
                     },
                 )?
@@ -179,6 +127,72 @@ fn run(cli: Cli) -> sift::Result<()> {
         }
     };
     std::io::stdout().lock().write_all(output.as_bytes())?;
+    Ok(())
+}
+
+fn ignore_mode(no_ignore: bool, no_gitignore: bool) -> sift::IgnoreMode {
+    if no_ignore {
+        sift::IgnoreMode::None
+    } else if no_gitignore {
+        sift::IgnoreMode::WithoutGit
+    } else {
+        sift::IgnoreMode::All
+    }
+}
+
+fn index_stdin(store: &SnapshotStore, name: Option<String>) -> sift::Result<SnapshotHandle> {
+    let mut bytes = Vec::new();
+    std::io::stdin()
+        .lock()
+        .take(sift::MAX_FILE_BYTES + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > sift::MAX_FILE_BYTES {
+        return Err(sift::Error::InvalidOptions(
+            "stdin exceeds the 8 MiB limit".into(),
+        ));
+    }
+    let text = String::from_utf8(bytes)
+        .map_err(|_| sift::Error::InvalidOptions("stdin is not valid UTF-8".into()))?;
+    store.index_documents(&[sift::TextDocument {
+        name: name.unwrap_or_else(|| "stdin".into()),
+        text,
+    }])
+}
+
+fn read_file_list(root: &std::path::Path, files: &mut Vec<PathBuf>) -> sift::Result<()> {
+    use std::io::BufRead;
+    let mut input = std::io::stdin().lock();
+    loop {
+        let mut bytes = Vec::new();
+        if input.read_until(0, &mut bytes)? == 0 {
+            break;
+        }
+        if bytes.pop() != Some(0) {
+            return Err(sift::Error::InvalidOptions(
+                "file list must end with NUL".into(),
+            ));
+        }
+        if bytes.is_empty() {
+            return Err(sift::Error::InvalidOptions("empty file list entry".into()));
+        }
+        #[cfg(unix)]
+        let path: PathBuf = {
+            use std::os::unix::ffi::OsStringExt;
+            std::ffi::OsString::from_vec(bytes).into()
+        };
+        #[cfg(not(unix))]
+        let path: PathBuf = String::from_utf8(bytes)
+            .map_err(|_| sift::Error::InvalidOptions("file path must be UTF-8".into()))?
+            .into();
+        let absolute = root.join(&path);
+        if !std::fs::symlink_metadata(&absolute).is_ok_and(|m| m.is_file()) {
+            return Err(sift::Error::Input {
+                path,
+                reason: "file list entries must name existing regular files".into(),
+            });
+        }
+        files.push(path);
+    }
     Ok(())
 }
 
