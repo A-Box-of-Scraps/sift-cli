@@ -9,6 +9,7 @@ Here is an overview of the project:
 
 ```
 .cargo/config.toml
+benchmarks/
 docs/
   IDEA.md       # Design decisions and proposals
   TODO.MD       # Remaining work
