@@ -1,0 +1,4 @@
+server:
+  listen_port: 8080
+  request_timeout_ms: 5000
+  max_connections: 128

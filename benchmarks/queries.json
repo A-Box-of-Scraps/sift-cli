@@ -1,0 +1,132 @@
+[
+  {
+    "category": "identifier",
+    "query": "rotate_session_token",
+    "expected": [
+      {
+        "path": "auth/session.rs",
+        "line": 1
+      }
+    ]
+  },
+  {
+    "category": "identifier",
+    "query": "retryWithBackoff",
+    "expected": [
+      {
+        "path": "network/retry.ts",
+        "line": 1
+      }
+    ]
+  },
+  {
+    "category": "identifier",
+    "query": "CommitTransaction",
+    "expected": [
+      {
+        "path": "storage/transaction.go",
+        "line": 3
+      }
+    ]
+  },
+  {
+    "category": "path",
+    "query": "db/migrations/001_users.sql",
+    "expected": [
+      {
+        "path": "db/migrations/001_users.sql",
+        "line": 1
+      }
+    ]
+  },
+  {
+    "category": "path",
+    "query": "config/server.yaml",
+    "expected": [
+      {
+        "path": "config/server.yaml",
+        "line": 1
+      }
+    ]
+  },
+  {
+    "category": "error-message",
+    "query": "session token expired",
+    "expected": [
+      {
+        "path": "auth/session.rs",
+        "line": 2
+      }
+    ]
+  },
+  {
+    "category": "error-message",
+    "query": "cannot commit read-only transaction",
+    "expected": [
+      {
+        "path": "storage/transaction.go",
+        "line": 4
+      }
+    ]
+  },
+  {
+    "category": "keyword",
+    "query": "UNIQUE",
+    "expected": [
+      {
+        "path": "db/migrations/001_users.sql",
+        "line": 3
+      }
+    ]
+  },
+  {
+    "category": "keyword",
+    "query": "request_timeout_ms",
+    "expected": [
+      {
+        "path": "config/server.yaml",
+        "line": 3
+      }
+    ]
+  },
+  {
+    "category": "natural-language",
+    "query": "remove oldest cache entry",
+    "expected": [
+      {
+        "path": "cache/store.py",
+        "line": 2
+      }
+    ]
+  },
+  {
+    "category": "natural-language",
+    "query": "retry failed requests with exponential delay",
+    "expected": [
+      {
+        "path": "network/retry.ts",
+        "line": 2
+      }
+    ]
+  },
+  {
+    "category": "filler",
+    "query": "where can I find the function that rotates a session token",
+    "expected": [
+      {
+        "path": "auth/session.rs",
+        "line": 1
+      }
+    ]
+  },
+  {
+    "category": "filler",
+    "query": "please show me how to retry failed requests",
+    "expected": [
+      {
+        "path": "network/retry.ts",
+        "line": 2
+      }
+    ]
+  }
+]

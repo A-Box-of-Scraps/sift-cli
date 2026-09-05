@@ -39,13 +39,18 @@ including completed input adapters.
 
 ## 2. Relevance and performance evaluation
 
-- [ ] Build a mixed-language relevance corpus with expected locations for
+Evaluation driver and protocol: `benchmarks/run.py` and `BENCHMARKS.md`. Optional
+`--flamegraphs` emits indexing and repeated-query SVGs separately from timings.
+The initial corpus is synthetic; reference-machine/cold-cache claims and tuning
+experiments remain open.
+
+- [x] Build a mixed-language relevance corpus with expected locations for
   identifier, path, error-message, keyword, and natural-language queries.
-- [ ] Measure top-5/top-10 retrieval and output size against rg for exact
+- [x] Measure top-5/top-10 retrieval and output size against rg for exact
   discovery and an unboosted lexical baseline.
 - [ ] Define reference hardware, input bytes/files/lines, and cold/warm cache
   conditions before assessing the 100,000-line indexing goal.
-- [ ] Benchmark process-to-published-index time, query startup, p50/p95 query
+- [x] Benchmark process-to-published-index time, query startup, p50/p95 query
   latency, peak memory, and database size using release builds.
 - [ ] Evaluate query coverage, exact identifier and phrase boosts, and handling
   of conversational filler. Current OR-connected components can match related
