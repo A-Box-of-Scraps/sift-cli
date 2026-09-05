@@ -52,6 +52,11 @@ no longer need a snapshot, delete it without affecting your source files:
 sift delete "$handle"
 ```
 
+## AI agent skill
+
+Check out the [sift-usage skill](skills/sift-usage/SKILL.md)!
+Copy `skills/sift-usage` into your agent's skill directory, and your favorite clanker will know how to install and use Sift when exploring!
+
 ## Documentation
 
 Start [HERE](docs/README.md)!

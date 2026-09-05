@@ -5,6 +5,9 @@ Start small, then follow links to the details you need.
 
 **New to Sift?** Follow [Your first search](tutorials/first-search.md).
 
+**Using an AI agent?** Check out the [sift-usage skill](../skills/sift-usage/SKILL.md).
+Copy `skills/sift-usage` into your agent's skill directory, and your favorite clanker will know how to install and use Sift when exploring!
+
 ## Tutorials: learn by doing
 
 - [Your first search](tutorials/first-search.md): install, index, query, and delete a snapshot.
