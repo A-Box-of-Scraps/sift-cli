@@ -101,12 +101,73 @@ impl SnapshotStore {
     }
 
     pub fn index(&self, request: &IndexRequest) -> Result<SnapshotHandle> {
-        let selected = input::select(request)?;
+        self.index_with_options(request, &input::DiscoveryOptions::default())
+    }
+
+    pub fn index_with_options(
+        &self,
+        request: &IndexRequest,
+        options: &input::DiscoveryOptions,
+    ) -> Result<SnapshotHandle> {
+        let selected = input::select(request, options)?;
+        self.index_selected(&selected)
+    }
+
+    pub fn index_documents(&self, documents: &[crate::TextDocument]) -> Result<SnapshotHandle> {
+        if documents.is_empty() {
+            return Err(Error::InvalidOptions(
+                "at least one document is required".into(),
+            ));
+        }
+        let root = RootInfo {
+            id: "documents".into(),
+            name: "documents".into(),
+            location: PathBuf::new(),
+        };
+        let mut names = std::collections::BTreeSet::new();
+        let mut typed = Vec::new();
+        for document in documents {
+            if document.name.is_empty() || !names.insert(&document.name) {
+                return Err(Error::InvalidOptions(
+                    "document names must be nonempty and unique".into(),
+                ));
+            }
+            if document.text.len() as u64 > input::MAX_FILE_BYTES || document.text.contains('\0') {
+                return Err(Error::InvalidOptions(
+                    "documents must be NUL-free UTF-8 within 8 MiB".into(),
+                ));
+            }
+            let name: String = document
+                .name
+                .bytes()
+                .map(|b| {
+                    if b.is_ascii_alphanumeric() || b"-_.".contains(&b) {
+                        (b as char).to_string()
+                    } else {
+                        format!("%{b:02X}")
+                    }
+                })
+                .collect();
+            typed.push(crate::Document {
+                root_id: root.id.clone(),
+                path: format!("document:{name}"),
+                content_hash: blake3::hash(document.text.as_bytes()).to_hex().to_string(),
+                text: document.text.clone(),
+            });
+        }
+        self.index_selected(&input::SelectedInput {
+            root,
+            files: Vec::new(),
+            documents: typed,
+        })
+    }
+
+    fn index_selected(&self, selected: &input::SelectedInput) -> Result<SnapshotHandle> {
         self.create_with(
             Uuid::new_v4(),
             sqlite::FORMAT_VERSION,
             chunk::PREPROCESSING_CONFIG,
-            |path, info| sqlite::index(path, info, &selected),
+            |path, info| sqlite::index(path, info, selected),
         )
     }
 

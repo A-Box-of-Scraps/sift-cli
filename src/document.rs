@@ -16,3 +16,9 @@ pub struct Document {
     pub content_hash: String,
     pub text: String,
 }
+
+#[derive(Clone, Debug)]
+pub struct TextDocument {
+    pub name: String,
+    pub text: String,
+}

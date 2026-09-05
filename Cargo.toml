@@ -9,6 +9,8 @@ repository = "https://github.com/A-Box-of-Scraps/sift-cli"
 [dependencies]
 blake3 = "1.8.7"
 clap = { version = "4.6.6", features = ["derive"] }
+globset = "0.4.20"
+ignore = "0.4.33"
 rusqlite = { version = "0.40.2", features = ["bundled", "fallible_uint"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"

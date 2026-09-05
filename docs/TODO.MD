@@ -4,30 +4,37 @@
 
 Implemented: separate immutable SQLite databases, explicit UTF-8 file indexing
 under one root, bounded overlapping chunks, content hashes and provenance,
-code-aware token variants, FTS5 ranking, and `index`, `query`, and `info` commands.
+code-aware token variants, FTS5 ranking, recursive directory/glob discovery,
+ignore controls, NUL-separated file lists, anonymous and typed documents, and
+`index`, `query`, and `info` commands.
 Queries support `--path`, `--limit`, compact text, and versioned JSON.
 
-Current limits: Linux-only publication, one root named `default`, explicit files
-only, and an 8 MiB per-file cap. Invalid UTF-8, NUL-containing files, and symlink
-inputs fail indexing. Chunking uses 32 lines, 4 overlap lines, and a 2048-byte cap.
+Current limits: Linux-only publication, one filesystem root named `default`
+or one synthetic `documents` root, and an 8 MiB per-document cap. Invalid UTF-8,
+NUL-containing files, and symlinks fail explicit indexing or are skipped during
+discovery. See `INPUTS.md` for discovery, adapter, and error behavior. Chunking
+uses 32 lines, 4 overlap lines, and a 2048-byte cap.
 
 `IDEA.md` retains the original design discussion, including historical status
-notes and proposals. The checklist below describes work remaining after phase two.
+notes and proposals. The checklist below describes work after phase two,
+including completed input adapters.
 
 ## 1. Input discovery and adapters
 
-- [ ] Add recursive directory indexing and quoted glob expansion, including
+- [x] Add recursive directory indexing and quoted glob expansion, including
   mixed file/directory/glob inputs and deduplication.
-- [ ] Define consistent ignore-file and hidden-file behavior. Keep symlinks
+- [x] Define consistent ignore-file and hidden-file behavior. Keep symlinks
   disabled by default; specify any overrides before implementing them.
-- [ ] Define skip-versus-fail behavior for discovered binaries, invalid text,
+- [x] Add `--no-ignore` (all ignore files) and `--no-gitignore` (Git ignore
+  rules only), independently of hidden-file and symlink behavior.
+- [x] Define skip-versus-fail behavior for discovered binaries, invalid text,
   oversized files, unreadable files, unmatched globs, and empty selections.
   Report skips and progress on stderr without contaminating handle output.
-- [ ] Add `--files0-from -` for NUL-separated file lists.
-- [ ] Add `--stdin` and optional `--name` for one anonymous document, with
+- [x] Add `--files0-from -` for NUL-separated file lists.
+- [x] Add `--stdin` and optional `--name` for one anonymous document, with
   stream-relative line numbers. Display names must not imply filesystem paths.
-- [ ] Allow library callers to index typed documents without temporary files.
-- [ ] Test ignored trees, duplicate selections, unusual filenames, symlink
+- [x] Allow library callers to index typed documents without temporary files.
+- [x] Test ignored trees, duplicate selections, unusual filenames, symlink
   changes, read failures, and files modified during ingestion.
 
 ## 2. Relevance and performance evaluation

@@ -318,12 +318,11 @@ fn rejects_unsupported_selection_and_symlink_components() {
     symlink("src", fixture.root.join("linked-dir")).unwrap();
     for files in [
         vec![],
-        vec!["src"],
         vec!["missing"],
         vec!["../outside"],
         vec!["link.txt"],
         vec!["linked-dir/a.txt"],
-        vec!["src/*.txt"],
+        vec!["src/*.missing"],
     ] {
         assert!(fixture.index(&files).is_err(), "{files:?}");
         fixture.assert_unpublished();
@@ -385,7 +384,7 @@ fn cli_round_trip_json_and_filter_ignore_query_working_directory() {
         "{}",
         String::from_utf8_lossy(&indexed.stderr)
     );
-    assert!(indexed.stderr.is_empty());
+    assert!(String::from_utf8_lossy(&indexed.stderr).contains("indexed 1 documents"));
     let stdout = String::from_utf8(indexed.stdout).unwrap();
     assert_eq!(stdout.lines().count(), 1);
     let handle = stdout.trim();

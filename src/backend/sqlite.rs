@@ -68,8 +68,30 @@ pub(crate) fn index(path: &Path, info: &SnapshotInfo, selected: &SelectedInput) 
         )?;
         let mut insert_search = transaction
             .prepare("INSERT INTO chunk_search (rowid, path, body) VALUES (?1, ?2, ?3)")?;
-        for source in &selected.files {
-            let document = input::read(&selected.root, source)?;
+        let mut count = 0;
+        let documents = selected
+            .files
+            .iter()
+            .map(|source| match input::read(&selected.root, source) {
+                Ok(document) => Ok(Some(document)),
+                Err(error) if !source.explicit => {
+                    input::report_skip(&error.to_string());
+                    Ok(None)
+                }
+                Err(error) => Err(error),
+            })
+            .chain(
+                selected
+                    .documents
+                    .iter()
+                    .cloned()
+                    .map(|document| Ok(Some(document))),
+            );
+        for document in documents {
+            let Some(document) = document? else {
+                continue;
+            };
+            count += 1;
             insert_file.execute(params![
                 document.root_id,
                 document.path,
@@ -93,6 +115,11 @@ pub(crate) fn index(path: &Path, info: &SnapshotInfo, selected: &SelectedInput) 
                     tokenize::searchable(chunk.text)
                 ])?;
             }
+        }
+        if count == 0 {
+            return Err(Error::InvalidOptions(
+                "selection contains no indexable documents".into(),
+            ));
         }
         transaction.execute(
             "INSERT INTO chunk_search(chunk_search) VALUES ('optimize')",
