@@ -9,8 +9,11 @@ Here is an overview of the project:
 
 ```
 .cargo/config.toml
+.github/
 benchmarks/
-docs/README.md  # Documentation entry point
+docs/README.md     # Documentation entry point
+lints/
+scripts/
 src/
 tests/
 .gitignore
