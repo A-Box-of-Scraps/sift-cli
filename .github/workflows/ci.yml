@@ -29,6 +29,15 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Lint
         run: cargo clippy --locked --all-targets -- -D warnings
+      - name: Install Dylint
+        run: cargo install cargo-dylint dylint-link --version 6.0.4 --locked
+      - name: Check explicit local types
+        run: cargo dylint --all -- --locked --all-targets
+      - name: Test custom lint
+        working-directory: lints/explicit-local-types
+        run: |
+          cargo fmt --all -- --check
+          cargo test --locked
       - name: Test
         run: cargo test --locked
       - name: Build

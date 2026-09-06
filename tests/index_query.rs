@@ -15,10 +15,10 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
-        let temporary = tempfile::tempdir().unwrap();
-        let root = temporary.path().join("project");
+        let temporary: tempfile::TempDir = tempfile::tempdir().unwrap();
+        let root: std::path::PathBuf = temporary.path().join("project");
         fs::create_dir(&root).unwrap();
-        let store = SnapshotStore::new(temporary.path().join("data")).unwrap();
+        let store: SnapshotStore = SnapshotStore::new(temporary.path().join("data")).unwrap();
         Self {
             temporary,
             store,
@@ -27,7 +27,7 @@ impl Fixture {
     }
 
     fn write(&self, path: &str, bytes: impl AsRef<[u8]>) {
-        let destination = self.root.join(path);
+        let destination: std::path::PathBuf = self.root.join(path);
         fs::create_dir_all(destination.parent().unwrap()).unwrap();
         fs::write(destination, bytes).unwrap();
     }
@@ -40,7 +40,7 @@ impl Fixture {
     }
 
     fn cli(&self) -> Command {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_sift"));
+        let mut command: Command = Command::new(env!("CARGO_BIN_EXE_sift"));
         command
             .current_dir(&self.root)
             .env("XDG_DATA_HOME", self.temporary.path().join("cli-data"));
@@ -48,27 +48,27 @@ impl Fixture {
     }
 
     fn assert_unpublished(&self) {
-        let indexes = self.temporary.path().join("data/indexes");
+        let indexes: std::path::PathBuf = self.temporary.path().join("data/indexes");
         assert!(!indexes.exists() || fs::read_dir(indexes).unwrap().next().is_none());
     }
 }
 
 #[test]
 fn indexes_provenance_and_deduplicates_paths() {
-    let fixture = Fixture::new();
+    let fixture: Fixture = Fixture::new();
     let text = "fn validateToken() { /* check authentication */ }\n";
     fixture.write("src/auth.rs", text);
     fixture.write("empty.txt", "");
-    let handle = fixture
+    let handle: SnapshotHandle = fixture
         .index(&["src/auth.rs", "./src/auth.rs", "empty.txt"])
         .unwrap();
-    let info = handle.info().unwrap();
+    let info: sift::SnapshotInfo = handle.info().unwrap();
     assert_eq!(info.format_version, 2);
     assert_eq!(info.file_count, 2);
     assert_eq!(info.chunk_count, 1);
     assert_eq!(info.roots.len(), 1);
     assert_eq!(info.roots[0].location, fixture.root);
-    let result = handle
+    let result: sift::SearchResult = handle
         .query(&SearchQuery::new("validateToken"))
         .unwrap()
         .results
@@ -81,7 +81,7 @@ fn indexes_provenance_and_deduplicates_paths() {
     assert_eq!(result.start_byte, 0);
     assert_eq!(result.end_byte, text.len());
     assert!(!result.truncated);
-    let connection = rusqlite::Connection::open_with_flags(
+    let connection: rusqlite::Connection = rusqlite::Connection::open_with_flags(
         handle.as_path().join("db.sqlite"),
         rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY,
     )
@@ -98,12 +98,12 @@ fn indexes_provenance_and_deduplicates_paths() {
 
 #[test]
 fn safe_queries_match_identifiers_paths_and_unicode() {
-    let fixture = Fixture::new();
+    let fixture: Fixture = Fixture::new();
     fixture.write(
         "src/auth.rs",
         "validateToken HTTPServer snake_case caf\u{e9} OR NEAR\n",
     );
-    let handle = fixture.index(&["src/auth.rs"]).unwrap();
+    let handle: SnapshotHandle = fixture.index(&["src/auth.rs"]).unwrap();
     for text in [
         "validateToken",
         "validate token",
@@ -115,7 +115,7 @@ fn safe_queries_match_identifiers_paths_and_unicode() {
         "\"OR\" : NEAR ( * )",
         "\"; DROP TABLE files; -- validateToken",
     ] {
-        let response = handle.query(&SearchQuery::new(text)).unwrap();
+        let response: sift::QueryResponse = handle.query(&SearchQuery::new(text)).unwrap();
         assert_eq!(response.results.len(), 1, "{text}");
     }
     assert_eq!(handle.info().unwrap().file_count, 1);
@@ -123,23 +123,23 @@ fn safe_queries_match_identifiers_paths_and_unicode() {
 
 #[test]
 fn bm25_prefers_a_focused_match_and_limits_results() {
-    let fixture = Fixture::new();
+    let fixture: Fixture = Fixture::new();
     fixture.write(
         "a.txt",
         format!("authentication {}", "unrelated ".repeat(100)),
     );
     fixture.write("b.txt", "authentication");
-    let handle = fixture.index(&["a.txt", "b.txt"]).unwrap();
-    let mut query = SearchQuery::new("authentication");
+    let handle: SnapshotHandle = fixture.index(&["a.txt", "b.txt"]).unwrap();
+    let mut query: SearchQuery = SearchQuery::new("authentication");
     query.limit = 1;
-    let response = handle.query(&query).unwrap();
+    let response: sift::QueryResponse = handle.query(&query).unwrap();
     assert_eq!(response.results.len(), 1);
     assert_eq!(response.results[0].path, "b.txt");
 }
 
 #[test]
 fn path_filters_use_components_before_limiting_and_escape_no_wildcards() {
-    let fixture = Fixture::new();
+    let fixture: Fixture = Fixture::new();
     for path in [
         "src/auth/file.rs",
         "src/authz/file.rs",
@@ -149,7 +149,7 @@ fn path_filters_use_components_before_limiting_and_escape_no_wildcards() {
     ] {
         fixture.write(path, "authentication");
     }
-    let handle = fixture
+    let handle: SnapshotHandle = fixture
         .index(&[
             "src/auth/file.rs",
             "src/authz/file.rs",
@@ -165,28 +165,28 @@ fn path_filters_use_components_before_limiting_and_escape_no_wildcards() {
         ("src/100%", "src/100%/file.rs"),
         ("src/under_score", "src/under_score/file.rs"),
     ] {
-        let mut query = SearchQuery::new("authentication");
+        let mut query: SearchQuery = SearchQuery::new("authentication");
         query.limit = 100;
         query.path = Some(filter.into());
-        let response = handle.query(&query).unwrap();
+        let response: sift::QueryResponse = handle.query(&query).unwrap();
         assert_eq!(response.results.len(), 1);
         assert_eq!(response.results[0].path, expected);
         query.limit = 1;
         assert_eq!(handle.query(&query).unwrap().results[0].path, expected);
     }
-    let mut query = SearchQuery::new("authentication");
+    let mut query: SearchQuery = SearchQuery::new("authentication");
     query.path = Some("src/au".into());
     assert!(handle.query(&query).unwrap().results.is_empty());
 }
 
 #[test]
 fn default_limit_caps_results_and_roots_disambiguate_identical_paths() {
-    let fixture = Fixture::new();
-    let paths: Vec<_> = (0..8).map(|i| format!("file{i}.txt")).collect();
+    let fixture: Fixture = Fixture::new();
+    let paths: Vec<String> = (0..8).map(|i| format!("file{i}.txt")).collect();
     for path in &paths {
         fixture.write(path, "authentication");
     }
-    let handle = fixture
+    let handle: SnapshotHandle = fixture
         .index(&paths.iter().map(String::as_str).collect::<Vec<_>>())
         .unwrap();
     assert_eq!(
@@ -197,9 +197,9 @@ fn default_limit_caps_results_and_roots_disambiguate_identical_paths() {
             .len(),
         5
     );
-    let other = Fixture::new();
+    let other: Fixture = Fixture::new();
     other.write("file0.txt", "authentication");
-    let second = other.index(&["file0.txt"]).unwrap();
+    let second: SnapshotHandle = other.index(&["file0.txt"]).unwrap();
     assert_ne!(
         handle.info().unwrap().roots[0].id,
         second.info().unwrap().roots[0].id
@@ -208,12 +208,12 @@ fn default_limit_caps_results_and_roots_disambiguate_identical_paths() {
 
 #[test]
 fn old_results_survive_source_edits_and_removal() {
-    let fixture = Fixture::new();
+    let fixture: Fixture = Fixture::new();
     fixture.write("a.txt", "originalToken\n");
-    let first = fixture.index(&["a.txt"]).unwrap();
-    let bytes = fs::read(first.as_path().join("db.sqlite")).unwrap();
+    let first: SnapshotHandle = fixture.index(&["a.txt"]).unwrap();
+    let bytes: Vec<u8> = fs::read(first.as_path().join("db.sqlite")).unwrap();
     fixture.write("a.txt", "replacementToken\n");
-    let second = fixture.index(&["a.txt"]).unwrap();
+    let second: SnapshotHandle = fixture.index(&["a.txt"]).unwrap();
     fs::remove_file(fixture.root.join("a.txt")).unwrap();
     assert_eq!(
         first
@@ -245,15 +245,15 @@ fn old_results_survive_source_edits_and_removal() {
 
 #[test]
 fn chunks_are_bounded_faithful_and_non_overlapping_in_results() {
-    let fixture = Fixture::new();
-    let text = (1..=100)
+    let fixture: Fixture = Fixture::new();
+    let text: String = (1..=100)
         .map(|i| format!("authentication line {i}\r\n"))
         .collect::<String>();
     fixture.write("a.txt", &text);
-    let handle = fixture.index(&["a.txt"]).unwrap();
-    let mut query = SearchQuery::new("authentication");
+    let handle: SnapshotHandle = fixture.index(&["a.txt"]).unwrap();
+    let mut query: SearchQuery = SearchQuery::new("authentication");
     query.limit = 100;
-    let results = handle.query(&query).unwrap().results;
+    let results: Vec<sift::SearchResult> = handle.query(&query).unwrap().results;
     assert!(results.len() > 1);
     for (i, result) in results.iter().enumerate() {
         assert!(result.snippet.len() <= MAX_CHUNK_BYTES);
@@ -266,11 +266,11 @@ fn chunks_are_bounded_faithful_and_non_overlapping_in_results() {
 
 #[test]
 fn long_unicode_lines_split_without_losing_source_offsets() {
-    let fixture = Fixture::new();
-    let text = "caf\u{e9} ".repeat(1000);
+    let fixture: Fixture = Fixture::new();
+    let text: String = "caf\u{e9} ".repeat(1000);
     fixture.write("a.txt", &text);
-    let handle = fixture.index(&["a.txt"]).unwrap();
-    let response = handle.query(&SearchQuery::new("caf\u{e9}")).unwrap();
+    let handle: SnapshotHandle = fixture.index(&["a.txt"]).unwrap();
+    let response: sift::QueryResponse = handle.query(&SearchQuery::new("caf\u{e9}")).unwrap();
     assert!(response.results.len() > 1);
     for result in response.results {
         assert_eq!((result.start_line, result.end_line), (1, 1));
@@ -282,7 +282,7 @@ fn long_unicode_lines_split_without_losing_source_offsets() {
 #[test]
 fn invalid_files_fail_without_publication() {
     for bytes in [b"not\0text".to_vec(), vec![0xff, 0xfe]] {
-        let fixture = Fixture::new();
+        let fixture: Fixture = Fixture::new();
         fixture.write("a-good.txt", "valid text");
         fixture.write("z-bad.txt", bytes);
         assert!(matches!(
@@ -291,7 +291,7 @@ fn invalid_files_fail_without_publication() {
         ));
         fixture.assert_unpublished();
     }
-    let fixture = Fixture::new();
+    let fixture: Fixture = Fixture::new();
     fixture.write("large.txt", "");
     fs::File::options()
         .write(true)
@@ -312,7 +312,7 @@ fn invalid_files_fail_without_publication() {
 #[test]
 fn rejects_unsupported_selection_and_symlink_components() {
     use std::os::unix::fs::symlink;
-    let fixture = Fixture::new();
+    let fixture: Fixture = Fixture::new();
     fixture.write("src/a.txt", "hello");
     symlink("src/a.txt", fixture.root.join("link.txt")).unwrap();
     symlink("src", fixture.root.join("linked-dir")).unwrap();
@@ -331,9 +331,9 @@ fn rejects_unsupported_selection_and_symlink_components() {
 
 #[test]
 fn query_validates_options_and_rejects_metadata_only_snapshots() {
-    let fixture = Fixture::new();
+    let fixture: Fixture = Fixture::new();
     fixture.write("empty.txt", "");
-    let handle = fixture.index(&["empty.txt"]).unwrap();
+    let handle: SnapshotHandle = fixture.index(&["empty.txt"]).unwrap();
     assert!(
         handle
             .query(&SearchQuery::new("anything"))
@@ -348,7 +348,7 @@ fn query_validates_options_and_rejects_metadata_only_snapshots() {
         ));
     }
     for limit in [0, 101, usize::MAX] {
-        let mut query = SearchQuery::new("text");
+        let mut query: SearchQuery = SearchQuery::new("text");
         query.limit = limit;
         assert!(matches!(
             handle.query(&query),
@@ -356,14 +356,14 @@ fn query_validates_options_and_rejects_metadata_only_snapshots() {
         ));
     }
     for path in ["/absolute", "src/../other"] {
-        let mut query = SearchQuery::new("text");
+        let mut query: SearchQuery = SearchQuery::new("text");
         query.path = Some(path.into());
         assert!(matches!(
             handle.query(&query),
             Err(Error::InvalidOptions(_))
         ));
     }
-    let metadata = fixture.store.create_snapshot().unwrap();
+    let metadata: SnapshotHandle = fixture.store.create_snapshot().unwrap();
     assert!(matches!(
         metadata.query(&SearchQuery::new("text")),
         Err(Error::NotSearchable)
@@ -372,9 +372,9 @@ fn query_validates_options_and_rejects_metadata_only_snapshots() {
 
 #[test]
 fn cli_round_trip_json_and_filter_ignore_query_working_directory() {
-    let fixture = Fixture::new();
+    let fixture: Fixture = Fixture::new();
     fixture.write("src/auth.rs", "validateToken\n");
-    let indexed = fixture
+    let indexed: std::process::Output = fixture
         .cli()
         .args(["index", "src/auth.rs"])
         .output()
@@ -385,13 +385,13 @@ fn cli_round_trip_json_and_filter_ignore_query_working_directory() {
         String::from_utf8_lossy(&indexed.stderr)
     );
     assert!(String::from_utf8_lossy(&indexed.stderr).contains("indexed 1 documents"));
-    let stdout = String::from_utf8(indexed.stdout).unwrap();
+    let stdout: String = String::from_utf8(indexed.stdout).unwrap();
     assert_eq!(stdout.lines().count(), 1);
     let handle = stdout.trim();
     assert!(
         Path::new(handle).starts_with(fixture.temporary.path().join("cli-data/sift-cli/indexes"))
     );
-    let queried = fixture
+    let queried: std::process::Output = fixture
         .cli()
         .current_dir(fixture.temporary.path())
         .args(["query", handle, "validate token", "--path", "src", "--json"])
@@ -414,7 +414,7 @@ fn cli_round_trip_json_and_filter_ignore_query_working_directory() {
 }
 
 fn assert_empty_and_invalid_queries(fixture: &Fixture, handle: &str) {
-    let no_results = fixture
+    let no_results: std::process::Output = fixture
         .cli()
         .args(["query", handle, "absentterm", "--json"])
         .output()
@@ -422,14 +422,14 @@ fn assert_empty_and_invalid_queries(fixture: &Fixture, handle: &str) {
     assert!(no_results.status.success());
     let payload: serde_json::Value = serde_json::from_slice(&no_results.stdout).unwrap();
     assert_eq!(payload["results"], serde_json::json!([]));
-    let text = fixture
+    let text: std::process::Output = fixture
         .cli()
         .args(["query", handle, "absentterm"])
         .output()
         .unwrap();
     assert!(text.status.success());
     assert_eq!(text.stdout, b"No results.\n");
-    let invalid = fixture
+    let invalid: std::process::Output = fixture
         .cli()
         .args(["query", handle, "hello", "--limit", "0"])
         .output()
@@ -440,9 +440,9 @@ fn assert_empty_and_invalid_queries(fixture: &Fixture, handle: &str) {
 
 #[test]
 fn cli_root_override_and_failed_index_output() {
-    let fixture = Fixture::new();
+    let fixture: Fixture = Fixture::new();
     fixture.write("src/a.txt", "text");
-    let indexed = fixture
+    let indexed: std::process::Output = fixture
         .cli()
         .current_dir(fixture.temporary.path())
         .args(["index", "--root"])
@@ -455,7 +455,7 @@ fn cli_root_override_and_failed_index_output() {
         "{}",
         String::from_utf8_lossy(&indexed.stderr)
     );
-    let failed = fixture
+    let failed: std::process::Output = fixture
         .cli()
         .args(["index", "missing.txt"])
         .output()
@@ -463,13 +463,13 @@ fn cli_root_override_and_failed_index_output() {
     assert_eq!(failed.status.code(), Some(1));
     assert!(failed.stdout.is_empty());
     assert!(!failed.stderr.is_empty());
-    let missing_args = fixture.cli().arg("index").output().unwrap();
+    let missing_args: std::process::Output = fixture.cli().arg("index").output().unwrap();
     assert_eq!(missing_args.status.code(), Some(2));
 }
 
 #[test]
 fn repeated_excerpts_leave_room_for_other_implementations() {
-    let fixture = Fixture::new();
+    let fixture: Fixture = Fixture::new();
     fixture.write(
         "primary.rs",
         include_str!("../benchmarks/corpus/diversity/primary.rs"),
@@ -486,16 +486,16 @@ fn repeated_excerpts_leave_room_for_other_implementations() {
         "monitor.go",
         include_str!("../benchmarks/corpus/diversity/monitor.go"),
     );
-    let handle = fixture
+    let handle: SnapshotHandle = fixture
         .index(&["primary.rs", "replica.rs", "scheduler.py", "monitor.go"])
         .unwrap();
-    let mut query = SearchQuery::new("cache_refresh_task");
+    let mut query: SearchQuery = SearchQuery::new("cache_refresh_task");
     query.limit = 3;
-    let results = handle.query(&query).unwrap().results;
+    let results: Vec<sift::SearchResult> = handle.query(&query).unwrap().results;
     assert!(results.iter().any(|result| result.path == "scheduler.py"));
     assert!(results.iter().any(|result| result.path == "monitor.go"));
     query.path = Some("primary.rs".into());
-    let results = handle.query(&query).unwrap().results;
+    let results: Vec<sift::SearchResult> = handle.query(&query).unwrap().results;
     assert_eq!(results.len(), 3);
     assert!(results.iter().all(|result| result.path == "primary.rs"));
 }

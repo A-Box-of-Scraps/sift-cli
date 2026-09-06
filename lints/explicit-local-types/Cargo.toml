@@ -1,0 +1,19 @@
+[package]
+name = "explicit_local_types"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+dylint_linting = "=6.0.4"
+
+[dev-dependencies]
+dylint_testing = "=6.0.4"
+
+[workspace]
+
+[package.metadata.rust-analyzer]
+rustc_private = true

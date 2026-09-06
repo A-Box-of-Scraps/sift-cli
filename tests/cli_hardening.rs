@@ -13,8 +13,8 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
-        let temporary = tempfile::tempdir().unwrap();
-        let root = temporary.path().join("project\n\u{1b}[2J");
+        let temporary: tempfile::TempDir = tempfile::tempdir().unwrap();
+        let root: std::path::PathBuf = temporary.path().join("project\n\u{1b}[2J");
         fs::create_dir(&root).unwrap();
         let path = "odd\n\u{1b}[31m\u{202e}\\café.txt";
         fs::write(
@@ -22,7 +22,7 @@ impl Fixture {
             "needle café\ttext\r\n\u{1b}[2J\u{7}\u{8}\u{9b}31m\u{202e}hidden\u{2066}end\n",
         )
         .unwrap();
-        let handle = SnapshotStore::new(temporary.path().join("data"))
+        let handle: SnapshotHandle = SnapshotStore::new(temporary.path().join("data"))
             .unwrap()
             .index(&IndexRequest {
                 root,
@@ -33,13 +33,13 @@ impl Fixture {
     }
 
     fn cli(&self) -> Command {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_sift"));
+        let mut command: Command = Command::new(env!("CARGO_BIN_EXE_sift"));
         command.env("XDG_DATA_HOME", self.temporary.path().join("cli-data"));
         command
     }
 
     fn query(&self) -> Command {
-        let mut command = self.cli();
+        let mut command: Command = self.cli();
         command.arg("query").arg(self.handle.as_path());
         command
     }
@@ -54,9 +54,9 @@ fn failure(output: Output, code: i32) {
 
 #[test]
 fn invalid_queries_have_usage_status_and_no_payload() {
-    let fixture = Fixture::new();
-    let before = fs::read(fixture.handle.as_path().join("db.sqlite")).unwrap();
-    let many_terms = (0..65)
+    let fixture: Fixture = Fixture::new();
+    let before: Vec<u8> = fs::read(fixture.handle.as_path().join("db.sqlite")).unwrap();
+    let many_terms: String = (0..65)
         .map(|i| format!("word{i}"))
         .collect::<Vec<_>>()
         .join(" ");
@@ -69,7 +69,7 @@ fn invalid_queries_have_usage_status_and_no_payload() {
         &many_terms,
     ] {
         for json in [false, true] {
-            let mut command = fixture.query();
+            let mut command: Command = fixture.query();
             command.arg(query);
             if json {
                 command.arg("--json");
@@ -108,18 +108,18 @@ fn damaged_and_unsupported_artifacts_fail_without_modification() {
         "UPDATE snapshot_metadata SET format_version = 999",
         "UPDATE snapshot_metadata SET backend = 'other'",
     ] {
-        let fixture = Fixture::new();
-        let database = fixture.handle.as_path().join("db.sqlite");
+        let fixture: Fixture = Fixture::new();
+        let database: std::path::PathBuf = fixture.handle.as_path().join("db.sqlite");
         if mutation == "corrupt" {
             fs::write(&database, b"not sqlite").unwrap();
         } else {
-            let connection = rusqlite::Connection::open(&database).unwrap();
+            let connection: rusqlite::Connection = rusqlite::Connection::open(&database).unwrap();
             connection.execute_batch(mutation).unwrap();
             connection.close().unwrap();
         }
-        let before = fs::read(&database).unwrap();
+        let before: Vec<u8> = fs::read(&database).unwrap();
         for subcommand in ["info", "query", "check"] {
-            let mut command = fixture.cli();
+            let mut command: Command = fixture.cli();
             command.arg(subcommand).arg(fixture.handle.as_path());
             if subcommand == "query" {
                 command.args(["needle", "--json"]);
@@ -132,9 +132,9 @@ fn damaged_and_unsupported_artifacts_fail_without_modification() {
 
 #[test]
 fn closed_output_pipes_fail_without_panicking() {
-    let fixture = Fixture::new();
+    let fixture: Fixture = Fixture::new();
     for subcommand in ["info", "query", "check", "index", "cleanup"] {
-        let mut command = fixture.cli();
+        let mut command: Command = fixture.cli();
         command.arg(subcommand);
         match subcommand {
             "index" => {
@@ -152,7 +152,7 @@ fn closed_output_pipes_fail_without_panicking() {
             }
         }
         // Close the reader before spawning so even short writes fail deterministically.
-        let (reader, writer) = std::io::pipe().unwrap();
+        let (reader, writer): (std::io::PipeReader, std::io::PipeWriter) = std::io::pipe().unwrap();
         drop(reader);
         command.stdout(Stdio::from(writer));
         failure(command.output().unwrap(), 1);
@@ -161,12 +161,12 @@ fn closed_output_pipes_fail_without_panicking() {
 
 #[test]
 fn human_output_escapes_controls_but_json_preserves_source() {
-    let fixture = Fixture::new();
-    let expected = fixture
+    let fixture: Fixture = Fixture::new();
+    let expected: sift::QueryResponse = fixture
         .handle
         .query(&sift::SearchQuery::new("needle"))
         .unwrap();
-    let json = fixture.query().args(["needle", "--json"]).output().unwrap();
+    let json: Output = fixture.query().args(["needle", "--json"]).output().unwrap();
     assert!(json.status.success());
     assert_eq!(
         serde_json::from_slice::<serde_json::Value>(&json.stdout).unwrap(),
@@ -183,7 +183,7 @@ fn human_output_escapes_controls_but_json_preserves_source() {
     ] {
         assert!(output.status.success());
         assert!(output.stderr.is_empty());
-        let text = String::from_utf8(output.stdout).unwrap();
+        let text: String = String::from_utf8(output.stdout).unwrap();
         assert!(
             !text
                 .chars()
@@ -192,13 +192,13 @@ fn human_output_escapes_controls_but_json_preserves_source() {
         );
         assert!(text.contains("\\u{1b}"));
     }
-    let text = fixture.query().arg("needle").output().unwrap();
+    let text: Output = fixture.query().arg("needle").output().unwrap();
     assert!(
         String::from_utf8(text.stdout)
             .unwrap()
             .contains("café\ttext\\r\n")
     );
-    let error = fixture
+    let error: Output = fixture
         .cli()
         .arg("info")
         .arg("bad\n\u{1b}[2J\u{202e}")
@@ -212,14 +212,14 @@ fn human_output_escapes_controls_but_json_preserves_source() {
 #[test]
 fn filesystem_permission_failures_have_no_success_payload() {
     use std::os::unix::{fs::PermissionsExt, process::CommandExt};
-    let fixture = Fixture::new();
+    let fixture: Fixture = Fixture::new();
     fs::set_permissions(fixture.temporary.path(), fs::Permissions::from_mode(0o755)).unwrap();
-    let blocked = fixture.temporary.path().join("blocked");
+    let blocked: std::path::PathBuf = fixture.temporary.path().join("blocked");
     fs::create_dir(&blocked).unwrap();
     fs::write(blocked.join("source.txt"), "needle").unwrap();
     fs::set_permissions(&blocked, fs::Permissions::from_mode(0o000)).unwrap();
     for operation in ["read", "write", "snapshot"] {
-        let mut command = fixture.cli();
+        let mut command: Command = fixture.cli();
         match operation {
             "read" => {
                 command

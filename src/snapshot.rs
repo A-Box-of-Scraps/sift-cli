@@ -16,7 +16,7 @@ pub struct SnapshotHandle(PathBuf);
 
 impl SnapshotHandle {
     pub fn from_path(path: impl Into<PathBuf>) -> Result<Self> {
-        let path = path.into();
+        let path: PathBuf = path.into();
         let valid_id = path
             .file_name()
             .and_then(|name| name.to_str())
@@ -36,11 +36,11 @@ impl SnapshotHandle {
         if !fs::symlink_metadata(&self.0)?.is_dir() {
             return Err(Error::InvalidHandle(self.0.clone()));
         }
-        let database = self.0.join("db.sqlite");
+        let database: PathBuf = self.0.join("db.sqlite");
         if !fs::symlink_metadata(&database)?.is_file() {
             return Err(Error::InvalidHandle(self.0.clone()));
         }
-        let info = sqlite::read(&database)?;
+        let info: SnapshotInfo = sqlite::read(&database)?;
         if self.0.file_name().and_then(|name| name.to_str()) != Some(info.id.as_str()) {
             return Err(Error::InvalidMetadata(
                 "snapshot ID does not match handle".into(),
@@ -50,7 +50,7 @@ impl SnapshotHandle {
     }
 
     pub fn query(&self, query: &SearchQuery) -> Result<QueryResponse> {
-        let prepared = query.prepare()?;
+        let prepared: crate::query::PreparedQuery = query.prepare()?;
         if self.info()?.format_version == 1 {
             return Err(Error::NotSearchable);
         }
@@ -87,8 +87,8 @@ impl SnapshotStore {
     }
 
     pub fn from_environment() -> Result<Self> {
-        let xdg = std::env::var_os("XDG_DATA_HOME");
-        let home = std::env::var_os("HOME");
+        let xdg: Option<std::ffi::OsString> = std::env::var_os("XDG_DATA_HOME");
+        let home: Option<std::ffi::OsString> = std::env::var_os("HOME");
         Self::new(data_directory(
             xdg.as_deref().map(Path::new),
             home.as_deref().map(Path::new),
@@ -101,15 +101,15 @@ impl SnapshotStore {
     }
 
     pub fn index(&self, request: &IndexRequest) -> Result<SnapshotHandle> {
-        self.index_with_options(request, &input::DiscoveryOptions::default())
+        self.index_with_options(request, &crate::input::DiscoveryOptions::default())
     }
 
     pub fn index_with_options(
         &self,
         request: &IndexRequest,
-        options: &input::DiscoveryOptions,
+        options: &crate::input::DiscoveryOptions,
     ) -> Result<SnapshotHandle> {
-        let selected = input::select(request, options)?;
+        let selected: input::SelectedInput = input::select(request, options)?;
         self.index_selected(&selected)
     }
 
@@ -119,20 +119,22 @@ impl SnapshotStore {
                 "at least one document is required".into(),
             ));
         }
-        let root = RootInfo {
+        let root: RootInfo = RootInfo {
             id: "documents".into(),
             name: "documents".into(),
             location: PathBuf::new(),
         };
-        let mut names = std::collections::BTreeSet::new();
-        let mut typed = Vec::new();
+        let mut names: std::collections::BTreeSet<&String> = std::collections::BTreeSet::new();
+        let mut typed: Vec<crate::document::Document> = Vec::new();
         for document in documents {
             if document.name.is_empty() || !names.insert(&document.name) {
                 return Err(Error::InvalidOptions(
                     "document names must be nonempty and unique".into(),
                 ));
             }
-            if document.text.len() as u64 > input::MAX_FILE_BYTES || document.text.contains('\0') {
+            if document.text.len() as u64 > crate::input::MAX_FILE_BYTES
+                || document.text.contains('\0')
+            {
                 return Err(Error::InvalidOptions(
                     "documents must be NUL-free UTF-8 within 8 MiB".into(),
                 ));
@@ -164,7 +166,7 @@ impl SnapshotStore {
     pub fn index_roots(
         &self,
         requests: &[(String, IndexRequest)],
-        options: &input::DiscoveryOptions,
+        options: &crate::input::DiscoveryOptions,
         base: Option<&SnapshotHandle>,
     ) -> Result<SnapshotHandle> {
         if requests.is_empty() {
@@ -172,9 +174,9 @@ impl SnapshotStore {
                 "at least one root is required".into(),
             ));
         }
-        let mut roots = match base {
+        let mut roots: Vec<RootInfo> = match base {
             Some(handle) => {
-                let info = handle.info()?;
+                let info: SnapshotInfo = handle.info()?;
                 if info.format_version == 1 {
                     return Err(Error::NotSearchable);
                 }
@@ -182,8 +184,8 @@ impl SnapshotStore {
             }
             None => Vec::new(),
         };
-        let mut names = std::collections::BTreeSet::new();
-        let mut selections = Vec::new();
+        let mut names: std::collections::BTreeSet<&String> = std::collections::BTreeSet::new();
+        let mut selections: Vec<input::SelectedInput> = Vec::new();
         for (name, request) in requests {
             if name.is_empty()
                 || name == "documents"
@@ -196,7 +198,7 @@ impl SnapshotStore {
                     "root names must be unique ASCII identifiers; documents is reserved".into(),
                 ));
             }
-            let mut selected = input::select(request, options)?;
+            let mut selected: input::SelectedInput = input::select(request, options)?;
             bind_root(&mut selected.root, name, &roots)?;
             selected.root.name = name.clone();
             roots.push(selected.root.clone());
@@ -220,8 +222,8 @@ impl SnapshotStore {
 
     fn lock(&self) -> Result<fs::File> {
         fs::create_dir_all(&self.directory)?;
-        let path = self.directory.join(".lifecycle-lock");
-        let mut options = fs::OpenOptions::new();
+        let path: PathBuf = self.directory.join(".lifecycle-lock");
+        let mut options: std::fs::OpenOptions = fs::OpenOptions::new();
         options.read(true).write(true).create(true).truncate(false);
         #[cfg(target_os = "linux")]
         {
@@ -230,14 +232,14 @@ impl SnapshotStore {
                 .mode(0o600)
                 .custom_flags(rustix::fs::OFlags::NOFOLLOW.bits() as i32);
         }
-        let file = options.open(path)?;
+        let file: std::fs::File = options.open(path)?;
         file.lock()?;
         Ok(file)
     }
 
     pub fn delete(&self, handle: &SnapshotHandle) -> Result<()> {
-        let _lock = self.lock()?;
-        let indexes = fs::canonicalize(self.directory.join("indexes"))?;
+        let _lock: std::fs::File = self.lock()?;
+        let indexes: PathBuf = fs::canonicalize(self.directory.join("indexes"))?;
         if handle.as_path().parent() != Some(indexes.as_path())
             || fs::canonicalize(handle.as_path())? != handle.as_path()
         {
@@ -245,20 +247,20 @@ impl SnapshotStore {
         }
         handle.info()?;
         artifact_entries(handle.as_path(), false)?;
-        let retired = indexes.join(format!(".staging-delete-{}", Uuid::new_v4()));
+        let retired: PathBuf = indexes.join(format!(".staging-delete-{}", Uuid::new_v4()));
         publish(handle.as_path(), &retired)?;
         remove_artifact(&retired, false)
     }
 
     pub fn cleanup_staging(&self) -> Result<usize> {
-        let _lock = self.lock()?;
-        let indexes = self.directory.join("indexes");
+        let _lock: std::fs::File = self.lock()?;
+        let indexes: PathBuf = self.directory.join("indexes");
         if !indexes.exists() {
             return Ok(0);
         }
         let mut removed = 0;
         for entry in fs::read_dir(indexes)? {
-            let entry = entry?;
+            let entry: std::fs::DirEntry = entry?;
             if entry
                 .file_name()
                 .to_str()
@@ -280,9 +282,9 @@ impl SnapshotStore {
         preprocessing_config: &str,
         initialize: impl FnOnce(&Path, &SnapshotInfo) -> Result<()>,
     ) -> Result<SnapshotHandle> {
-        let _lock = self.lock()?;
-        let indexes = self.directory.join("indexes");
-        let mut builder = fs::DirBuilder::new();
+        let _lock: std::fs::File = self.lock()?;
+        let indexes: PathBuf = self.directory.join("indexes");
+        let mut builder: std::fs::DirBuilder = fs::DirBuilder::new();
         builder.recursive(true);
         #[cfg(unix)]
         {
@@ -290,16 +292,16 @@ impl SnapshotStore {
             builder.mode(0o700);
         }
         builder.create(&indexes)?;
-        let indexes = fs::canonicalize(indexes)?;
-        let mut staging_builder = tempfile::Builder::new();
+        let indexes: PathBuf = fs::canonicalize(indexes)?;
+        let mut staging_builder: tempfile::Builder<'_, '_> = tempfile::Builder::new();
         staging_builder.prefix(".staging-");
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             staging_builder.permissions(fs::Permissions::from_mode(0o700));
         }
-        let staging = staging_builder.tempdir_in(&indexes)?;
-        let info = SnapshotInfo {
+        let staging: tempfile::TempDir = staging_builder.tempdir_in(&indexes)?;
+        let info: SnapshotInfo = SnapshotInfo {
             id: id.to_string(),
             created_at_unix_seconds: SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -316,11 +318,12 @@ impl SnapshotStore {
         };
         initialize(&staging.path().join("db.sqlite"), &info)?;
         // Reject sidecars: published databases must be self-contained.
-        let entries = fs::read_dir(staging.path())?.collect::<std::io::Result<Vec<_>>>()?;
+        let entries: Vec<std::fs::DirEntry> =
+            fs::read_dir(staging.path())?.collect::<std::io::Result<Vec<_>>>()?;
         if entries.len() != 1 || entries[0].file_name() != "db.sqlite" {
             return Err(Error::InvalidMetadata("unexpected staging files".into()));
         }
-        let destination = indexes.join(&info.id);
+        let destination: PathBuf = indexes.join(&info.id);
         publish(staging.path(), &destination)?;
         // Disarm cleanup after moving the staging directory.
         let _ = staging.keep();
@@ -355,18 +358,20 @@ mod tests {
 
     #[test]
     fn interrupted_extension_child() {
-        let Some(directory) = std::env::var_os("SIFT_TEST_INTERRUPTION_STORE") else {
+        let Some(directory): Option<std::ffi::OsString> =
+            std::env::var_os("SIFT_TEST_INTERRUPTION_STORE")
+        else {
             return;
         };
-        let base = std::env::var_os("SIFT_TEST_INTERRUPTION_BASE").unwrap();
-        let store = SnapshotStore::new(directory).unwrap();
+        let base: std::ffi::OsString = std::env::var_os("SIFT_TEST_INTERRUPTION_BASE").unwrap();
+        let store: SnapshotStore = SnapshotStore::new(directory).unwrap();
         let _ = store.create_with(
             Uuid::new_v4(),
             sqlite::FORMAT_VERSION,
             chunk::PREPROCESSING_CONFIG,
             |path, _| {
                 fs::copy(PathBuf::from(base).join("db.sqlite"), path)?;
-                let connection = rusqlite::Connection::open(path)?;
+                let connection: rusqlite::Connection = rusqlite::Connection::open(path)?;
                 connection.execute_batch(
                     "BEGIN IMMEDIATE; UPDATE snapshot_metadata SET snapshot_id = 'interrupted';",
                 )?;
@@ -378,22 +383,23 @@ mod tests {
 
     #[test]
     fn interrupted_extension_is_unpublished_and_recoverable() {
-        let temporary = tempfile::tempdir().unwrap();
-        let store = SnapshotStore::new(temporary.path()).unwrap();
-        let base = store
+        let temporary: tempfile::TempDir = tempfile::tempdir().unwrap();
+        let store: SnapshotStore = SnapshotStore::new(temporary.path()).unwrap();
+        let base: SnapshotHandle = store
             .index_documents(&[crate::TextDocument {
                 name: "test".into(),
                 text: "original searchable content".into(),
             }])
             .unwrap();
-        let before = fs::read(base.as_path().join("db.sqlite")).unwrap();
-        let status = std::process::Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", "snapshot::tests::interrupted_extension_child"])
-            .env("SIFT_TEST_INTERRUPTION_STORE", temporary.path())
-            .env("SIFT_TEST_INTERRUPTION_BASE", base.as_path())
-            .stdout(std::process::Stdio::null())
-            .status()
-            .unwrap();
+        let before: Vec<u8> = fs::read(base.as_path().join("db.sqlite")).unwrap();
+        let status: std::process::ExitStatus =
+            std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "snapshot::tests::interrupted_extension_child"])
+                .env("SIFT_TEST_INTERRUPTION_STORE", temporary.path())
+                .env("SIFT_TEST_INTERRUPTION_BASE", base.as_path())
+                .stdout(std::process::Stdio::null())
+                .status()
+                .unwrap();
         assert_eq!(status.code(), Some(99));
         assert_eq!(store.cleanup_staging().unwrap(), 1);
         assert_eq!(store.cleanup_staging().unwrap(), 0);
@@ -409,14 +415,18 @@ mod tests {
 
     #[test]
     fn cleanup_waits_for_active_builder() {
-        let temporary = tempfile::tempdir().unwrap();
-        let store = SnapshotStore::new(temporary.path()).unwrap();
-        let lock = store.lock().unwrap();
-        let staging = temporary.path().join("indexes/.staging-active");
+        let temporary: tempfile::TempDir = tempfile::tempdir().unwrap();
+        let store: SnapshotStore = SnapshotStore::new(temporary.path()).unwrap();
+        let lock: std::fs::File = store.lock().unwrap();
+        let staging: PathBuf = temporary.path().join("indexes/.staging-active");
         fs::create_dir_all(&staging).unwrap();
-        let (started_tx, started_rx) = std::sync::mpsc::channel();
-        let (done_tx, done_rx) = std::sync::mpsc::channel();
-        let worker = std::thread::spawn(move || {
+        let (started_tx, started_rx): (std::sync::mpsc::Sender<()>, std::sync::mpsc::Receiver<()>) =
+            std::sync::mpsc::channel();
+        let (done_tx, done_rx): (
+            std::sync::mpsc::Sender<usize>,
+            std::sync::mpsc::Receiver<usize>,
+        ) = std::sync::mpsc::channel();
+        let worker: std::thread::JoinHandle<()> = std::thread::spawn(move || {
             started_tx.send(()).unwrap();
             done_tx.send(store.cleanup_staging().unwrap()).unwrap();
         });
@@ -439,12 +449,13 @@ mod tests {
 
     #[test]
     fn failure_cleans_staging_and_does_not_publish() {
-        let temporary = tempfile::tempdir().unwrap();
-        let store = SnapshotStore::new(temporary.path()).unwrap();
-        let result = store.create_with(Uuid::new_v4(), 1, "none", |path, _| {
-            fs::write(path, b"partial database")?;
-            Err(Error::InvalidMetadata("injected failure".into()))
-        });
+        let temporary: tempfile::TempDir = tempfile::tempdir().unwrap();
+        let store: SnapshotStore = SnapshotStore::new(temporary.path()).unwrap();
+        let result: Result<SnapshotHandle> =
+            store.create_with(Uuid::new_v4(), 1, "none", |path, _| {
+                fs::write(path, b"partial database")?;
+                Err(Error::InvalidMetadata("injected failure".into()))
+            });
         assert!(result.is_err());
         assert_eq!(
             fs::read_dir(temporary.path().join("indexes"))
@@ -456,11 +467,11 @@ mod tests {
 
     #[test]
     fn collision_preserves_existing_snapshot_and_cleans_staging() {
-        let temporary = tempfile::tempdir().unwrap();
-        let store = SnapshotStore::new(temporary.path()).unwrap();
-        let id = Uuid::new_v4();
-        let handle = store.create_with(id, 1, "none", sqlite::create).unwrap();
-        let before = fs::read(handle.as_path().join("db.sqlite")).unwrap();
+        let temporary: tempfile::TempDir = tempfile::tempdir().unwrap();
+        let store: SnapshotStore = SnapshotStore::new(temporary.path()).unwrap();
+        let id: Uuid = Uuid::new_v4();
+        let handle: SnapshotHandle = store.create_with(id, 1, "none", sqlite::create).unwrap();
+        let before: Vec<u8> = fs::read(handle.as_path().join("db.sqlite")).unwrap();
         assert!(matches!(
             store.create_with(id, 1, "none", sqlite::create),
             Err(Error::AlreadyExists(_))
@@ -487,7 +498,7 @@ fn encode_name_byte(byte: u8) -> String {
 }
 
 fn artifact_entries(path: &Path, staging: bool) -> Result<Vec<fs::DirEntry>> {
-    let metadata = fs::symlink_metadata(path)?;
+    let metadata: std::fs::Metadata = fs::symlink_metadata(path)?;
     if !metadata.is_dir() {
         return Err(Error::InvalidHandle(path.into()));
     }
@@ -498,9 +509,10 @@ fn artifact_entries(path: &Path, staging: bool) -> Result<Vec<fs::DirEntry>> {
             return Err(Error::InvalidHandle(path.into()));
         }
     }
-    let entries = fs::read_dir(path)?.collect::<std::io::Result<Vec<_>>>()?;
+    let entries: Vec<std::fs::DirEntry> =
+        fs::read_dir(path)?.collect::<std::io::Result<Vec<_>>>()?;
     for entry in &entries {
-        let name = entry.file_name();
+        let name: std::ffi::OsString = entry.file_name();
         let allowed = name == "db.sqlite" || (staging && name == "db.sqlite-journal");
         if !allowed || !entry.file_type()?.is_file() {
             return Err(Error::InvalidHandle(path.into()));
@@ -526,18 +538,18 @@ pub struct SourceStatus {
 
 impl SnapshotHandle {
     pub fn check_staleness(&self) -> Result<Vec<SourceStatus>> {
-        let info = self.info()?;
+        let info: SnapshotInfo = self.info()?;
         if info.format_version == 1 {
             return Err(Error::NotSearchable);
         }
-        let mut statuses = Vec::new();
+        let mut statuses: Vec<SourceStatus> = Vec::new();
         for (root_id, path, hash) in sqlite::sources(&self.0.join("db.sqlite"))? {
-            let root = info
+            let root: &RootInfo = info
                 .roots
                 .iter()
                 .find(|root| root.id == root_id)
                 .ok_or_else(|| Error::InvalidMetadata("source has no root".into()))?;
-            let status = if root.location.as_os_str().is_empty() {
+            let status: String = if root.location.as_os_str().is_empty() {
                 "unavailable".into()
             } else if Path::new(&path).is_absolute()
                 || Path::new(&path)
@@ -546,7 +558,7 @@ impl SnapshotHandle {
             {
                 return Err(Error::InvalidMetadata("invalid source path".into()));
             } else {
-                let source = input::SelectedFile {
+                let source: input::SelectedFile = input::SelectedFile {
                     absolute: root.location.join(&path),
                     logical: path.clone(),
                     explicit: true,

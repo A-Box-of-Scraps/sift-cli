@@ -22,7 +22,7 @@ fn build(
     info: &SnapshotInfo,
     populate: impl FnOnce(&Transaction<'_>) -> Result<()>,
 ) -> Result<()> {
-    let mut connection = Connection::open_with_flags(
+    let mut connection: Connection = Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
     )?;
@@ -30,7 +30,7 @@ fn build(
     connection.execute_batch(
         "PRAGMA journal_mode = DELETE; PRAGMA synchronous = FULL; PRAGMA foreign_keys = ON;",
     )?;
-    let transaction = connection.transaction()?;
+    let transaction: Transaction<'_> = connection.transaction()?;
     transaction.execute_batch(include_str!("schema.sql"))?;
     transaction.execute(
         "INSERT INTO snapshot_metadata VALUES (1, ?1, ?2, ?3, ?4, ?5)",
@@ -64,14 +64,14 @@ fn populate(transaction: &Transaction<'_>, selected: &SelectedInput) -> Result<(
             selected.root.location.to_str()
         ],
     )?;
-    let mut insert_file = transaction.prepare(
+    let mut insert_file: rusqlite::Statement<'_> = transaction.prepare(
         "INSERT INTO files (root_id, path, content_hash, byte_count) VALUES (?1, ?2, ?3, ?4)",
     )?;
-    let mut insert_chunk = transaction.prepare(
+    let mut insert_chunk: rusqlite::Statement<'_> = transaction.prepare(
         "INSERT INTO chunks (file_id, start_line, end_line, start_byte, end_byte, text)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
     )?;
-    let mut insert_search =
+    let mut insert_search: rusqlite::Statement<'_> =
         transaction.prepare("INSERT INTO chunk_search (rowid, path, body) VALUES (?1, ?2, ?3)")?;
     let mut count = 0;
     let documents = selected
@@ -93,7 +93,7 @@ fn populate(transaction: &Transaction<'_>, selected: &SelectedInput) -> Result<(
                 .map(|document| Ok(Some(document))),
         );
     for document in documents {
-        let Some(document) = document? else {
+        let Some(document): Option<crate::document::Document> = document? else {
             continue;
         };
         count += 1;
@@ -107,7 +107,7 @@ fn populate(transaction: &Transaction<'_>, selected: &SelectedInput) -> Result<(
             document.text.len()
         ])?;
         let file_id = transaction.last_insert_rowid();
-        let searchable_path = tokenize::searchable(&document.path);
+        let searchable_path: String = tokenize::searchable(&document.path);
         for chunk in chunk::chunk_text(&document.text) {
             insert_chunk.execute(params![
                 file_id,
@@ -137,13 +137,14 @@ fn populate(transaction: &Transaction<'_>, selected: &SelectedInput) -> Result<(
 }
 
 pub(crate) fn read(path: &Path) -> Result<SnapshotInfo> {
-    let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    let connection: Connection =
+        Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     let application_id: i64 =
         connection.query_row("PRAGMA application_id", [], |row| row.get(0))?;
     if application_id != APPLICATION_ID {
         return Err(Error::InvalidMetadata("not a Sift database".into()));
     }
-    let mut info = connection.query_row(
+    let mut info: SnapshotInfo = connection.query_row(
         "SELECT snapshot_id, created_at_unix_seconds, backend, format_version,
                 preprocessing_config FROM snapshot_metadata WHERE singleton = 1",
         [],
@@ -180,7 +181,7 @@ pub(crate) fn read(path: &Path) -> Result<SnapshotInfo> {
         ));
     }
     if info.format_version == FORMAT_VERSION {
-        let mut statement =
+        let mut statement: rusqlite::Statement<'_> =
             connection.prepare("SELECT id, name, location FROM roots ORDER BY name")?;
         info.roots = statement
             .query_map([], |row| {
@@ -200,15 +201,16 @@ pub(crate) fn read(path: &Path) -> Result<SnapshotInfo> {
 }
 
 pub(crate) fn query(path: &Path, query: &PreparedQuery) -> Result<Vec<SearchResult>> {
-    let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    let connection: Connection =
+        Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     // FTS syntax is generated here, never accepted from the caller.
-    let expression = query
+    let expression: String = query
         .terms
         .iter()
         .map(|term| format!("\"{}\"", term.replace('"', "\"\"")))
         .collect::<Vec<_>>()
         .join(" OR ");
-    let mut statement = connection.prepare(
+    let mut statement: rusqlite::Statement<'_> = connection.prepare(
         "SELECT c.id, r.id, r.name, f.path, c.start_line, c.end_line,
                 c.start_byte, c.end_byte, c.text
          FROM chunk_search
@@ -237,7 +239,7 @@ pub(crate) fn query(path: &Path, query: &PreparedQuery) -> Result<Vec<SearchResu
             })
         },
     )?;
-    let candidates = candidates.collect::<rusqlite::Result<Vec<_>>>()?;
+    let candidates: Vec<SearchResult> = candidates.collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(query::select(candidates, query.limit))
 }
 
@@ -245,9 +247,9 @@ pub(crate) fn extend(path: &Path, info: &SnapshotInfo, selections: &[SelectedInp
     if selections.is_empty() {
         return Ok(());
     }
-    let mut connection = Connection::open(path)?;
+    let mut connection: Connection = Connection::open(path)?;
     connection.execute_batch("PRAGMA foreign_keys = ON; PRAGMA journal_mode = DELETE;")?;
-    let transaction = connection.transaction()?;
+    let transaction: Transaction<'_> = connection.transaction()?;
     transaction.execute(
         "UPDATE snapshot_metadata SET snapshot_id = ?1, created_at_unix_seconds = ?2",
         params![info.id, info.created_at_unix_seconds],
@@ -262,7 +264,8 @@ pub(crate) fn extend(path: &Path, info: &SnapshotInfo, selections: &[SelectedInp
 }
 
 pub(crate) fn sources(path: &Path) -> Result<Vec<(String, String, String)>> {
-    let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    let connection: Connection =
+        Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     Ok(connection
         .prepare("SELECT root_id, path, content_hash FROM files ORDER BY root_id, path")?
         .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?

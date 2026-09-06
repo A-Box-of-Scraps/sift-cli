@@ -59,20 +59,21 @@ pub(crate) fn select(request: &IndexRequest, options: &DiscoveryOptions) -> Resu
             "at least one input is required".into(),
         ));
     }
-    let location = fs::canonicalize(&request.root).map_err(|e| invalid(&request.root, e))?;
+    let location: PathBuf =
+        fs::canonicalize(&request.root).map_err(|e| invalid(&request.root, e))?;
     if !location.is_dir() {
         return Err(invalid(&location, "root must be a directory"));
     }
     let location_text = location
         .to_str()
         .ok_or_else(|| invalid(&location, "root path must be UTF-8"))?;
-    let root = RootInfo {
+    let root: RootInfo = RootInfo {
         id: blake3::hash(location_text.as_bytes()).to_hex().to_string(),
         name: "default".into(),
         location,
     };
-    let mut files = BTreeMap::new();
-    let mut selections = Vec::new();
+    let mut files: BTreeMap<String, SelectedFile> = BTreeMap::new();
+    let mut selections: Vec<Selection> = Vec::new();
     for input in &request.files {
         select_input(&root, input, &mut files, &mut selections)?;
     }
@@ -95,7 +96,7 @@ fn select_input(
     files: &mut BTreeMap<String, SelectedFile>,
     selections: &mut Vec<Selection>,
 ) -> Result<()> {
-    let relative = if input.is_absolute() {
+    let relative: &Path = if input.is_absolute() {
         input
             .strip_prefix(&root.location)
             .map_err(|_| invalid(input, "file is outside the selected root"))?
@@ -118,11 +119,11 @@ fn select_input(
     let text = relative
         .to_str()
         .ok_or_else(|| invalid(input, "file path must be UTF-8"))?;
-    let absolute = root.location.join(&relative);
+    let absolute: PathBuf = root.location.join(&relative);
     if fs::symlink_metadata(&absolute).is_ok() {
         reject_symlinks(root, &relative, input)?;
         if absolute.is_file() {
-            let logical = relative
+            let logical: String = relative
                 .components()
                 .filter_map(|c| match c {
                     Component::Normal(n) => n.to_str(),
@@ -147,7 +148,7 @@ fn select_input(
             return Err(invalid(input, "expected a regular file or directory"));
         }
     } else if text.contains(['*', '?', '[', '{']) {
-        let matcher = globset::GlobBuilder::new(text)
+        let matcher: globset::GlobMatcher = globset::GlobBuilder::new(text)
             .literal_separator(true)
             .backslash_escape(false)
             .build()
@@ -164,7 +165,7 @@ fn select_input(
 }
 
 fn reject_symlinks(root: &RootInfo, relative: &Path, input: &Path) -> Result<()> {
-    let mut checked = root.location.clone();
+    let mut checked: PathBuf = root.location.clone();
     for part in relative.components() {
         checked.push(part);
         if fs::symlink_metadata(&checked)
@@ -184,8 +185,8 @@ fn discover(
     selections: &[Selection],
     files: &mut BTreeMap<String, SelectedFile>,
 ) -> Result<()> {
-    let mut matched = vec![false; selections.len()];
-    let mut walker = ignore::WalkBuilder::new(&root.location);
+    let mut matched: Vec<bool> = vec![false; selections.len()];
+    let mut walker: ignore::WalkBuilder = ignore::WalkBuilder::new(&root.location);
     walker
         .hidden(!options.hidden)
         .follow_links(false)
@@ -196,7 +197,7 @@ fn discover(
         .git_global(false)
         .require_git(false);
     for entry in walker.build() {
-        let entry = match entry {
+        let entry: ignore::DirEntry = match entry {
             Ok(e) => e,
             Err(e) => {
                 report_skip(&e.to_string());
@@ -206,7 +207,7 @@ fn discover(
         if let Some(error) = entry.error() {
             report_skip(&error.to_string());
         }
-        let relative = entry.path().strip_prefix(&root.location).unwrap();
+        let relative: &Path = entry.path().strip_prefix(&root.location).unwrap();
         let mut selected = false;
         for (i, selection) in selections.iter().enumerate() {
             let hit = match &selection.glob {
@@ -228,7 +229,7 @@ fn discover(
             ));
             continue;
         }
-        let Some(logical) = relative.to_str() else {
+        let Some(logical): Option<&str> = relative.to_str() else {
             report_skip(&format!("{:?}: file path must be UTF-8", entry.path()));
             continue;
         };
@@ -266,8 +267,8 @@ fn read_with(
     source: &SelectedFile,
     before_read: impl FnOnce(),
 ) -> Result<Document> {
-    let file = open_file(root, source).map_err(|error| invalid(&source.absolute, error))?;
-    let metadata = file
+    let file: File = open_file(root, source).map_err(|error| invalid(&source.absolute, error))?;
+    let metadata: std::fs::Metadata = file
         .metadata()
         .map_err(|error| invalid(&source.absolute, error))?;
     if !metadata.is_file() {
@@ -277,7 +278,7 @@ fn read_with(
         return Err(invalid(&source.absolute, "file exceeds the 8 MiB limit"));
     }
     before_read();
-    let mut bytes = Vec::new();
+    let mut bytes: Vec<u8> = Vec::new();
     (&file)
         .take(MAX_FILE_BYTES + 1)
         .read_to_end(&mut bytes)
@@ -285,7 +286,7 @@ fn read_with(
     if bytes.len() as u64 > MAX_FILE_BYTES {
         return Err(invalid(&source.absolute, "file exceeds the 8 MiB limit"));
     }
-    let after = file.metadata().map_err(|e| invalid(&source.absolute, e))?;
+    let after: std::fs::Metadata = file.metadata().map_err(|e| invalid(&source.absolute, e))?;
     if metadata.len() != after.len() || metadata.modified().ok() != after.modified().ok() {
         return Err(invalid(&source.absolute, "file changed during ingestion"));
     }
@@ -295,8 +296,8 @@ fn read_with(
             "NUL-containing files are not supported",
         ));
     }
-    let content_hash = blake3::hash(&bytes).to_hex().to_string();
-    let text = String::from_utf8(bytes)
+    let content_hash: String = blake3::hash(&bytes).to_hex().to_string();
+    let text: String = String::from_utf8(bytes)
         .map_err(|_| invalid(&source.absolute, "file is not valid UTF-8"))?;
     Ok(Document {
         root_id: root.id.clone(),
@@ -311,7 +312,7 @@ fn open_file(root: &RootInfo, source: &SelectedFile) -> std::io::Result<File> {
     use rustix::fs::{Mode, OFlags, openat};
 
     // Resolve through held directory descriptors, not a check-then-open path.
-    let mut file = File::open("/")?;
+    let mut file: File = File::open("/")?;
     for component in root.location.components() {
         if let Component::Normal(name) = component {
             file = openat(
@@ -323,9 +324,11 @@ fn open_file(root: &RootInfo, source: &SelectedFile) -> std::io::Result<File> {
             .into();
         }
     }
-    let mut components = source.logical.split('/').peekable();
+    let mut components: std::iter::Peekable<std::str::Split<'_, char>> =
+        source.logical.split('/').peekable();
     while let Some(component) = components.next() {
-        let mut flags = OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::NONBLOCK;
+        let mut flags: OFlags =
+            OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::NONBLOCK;
         if components.peek().is_some() {
             flags |= OFlags::DIRECTORY;
         }
@@ -346,10 +349,10 @@ mod tests {
 
     #[test]
     fn detects_mutation_and_read_failures() {
-        let temporary = tempfile::tempdir().unwrap();
-        let path = temporary.path().join("a.txt");
+        let temporary: tempfile::TempDir = tempfile::tempdir().unwrap();
+        let path: PathBuf = temporary.path().join("a.txt");
         fs::write(&path, "before").unwrap();
-        let selected = select(
+        let selected: SelectedInput = select(
             &IndexRequest {
                 root: temporary.path().into(),
                 files: vec!["a.txt".into()],
@@ -372,11 +375,11 @@ mod tests {
     #[test]
     fn rejects_symlinks_introduced_after_selection() {
         for replacement in ["file", "directory", "root"] {
-            let temporary = tempfile::tempdir().unwrap();
-            let root = temporary.path().join("root");
+            let temporary: tempfile::TempDir = tempfile::tempdir().unwrap();
+            let root: PathBuf = temporary.path().join("root");
             fs::create_dir_all(root.join("src")).unwrap();
             fs::write(root.join("src/a.txt"), "original").unwrap();
-            let selected = select(
+            let selected: SelectedInput = select(
                 &IndexRequest {
                     root: root.clone(),
                     files: vec!["src/a.txt".into()],

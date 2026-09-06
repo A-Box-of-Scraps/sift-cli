@@ -11,7 +11,7 @@ pub fn query(response: &QueryResponse, json: bool) -> sift::Result<String> {
     if response.results.is_empty() {
         return Ok("No results.\n".into());
     }
-    let mut output = String::new();
+    let mut output: String = String::new();
     for result in &response.results {
         if !output.is_empty() {
             output.push('\n');
@@ -34,7 +34,7 @@ pub fn query(response: &QueryResponse, json: bool) -> sift::Result<String> {
 }
 
 pub fn info(info: &SnapshotInfo) -> String {
-    let mut output = format!(
+    let mut output: String = format!(
         "id: {}\nbackend: {}\nformat: {}\ncreated_at_unix_seconds: {}\npreprocessing: {}\nfiles: {}\nchunks: {}\n",
         info.id.escape_default(),
         info.backend.escape_default(),
@@ -58,7 +58,7 @@ pub fn info(info: &SnapshotInfo) -> String {
 }
 
 pub fn terminal_text(text: &str, multiline: bool) -> String {
-    let mut output = String::new();
+    let mut output: String = String::new();
     for character in text.chars() {
         if multiline && matches!(character, '\n' | '\t') {
             output.push(character);
@@ -71,7 +71,7 @@ pub fn terminal_text(text: &str, multiline: bool) -> String {
 
 pub fn handle(path: &std::path::Path) -> sift::Result<()> {
     use std::io::{IsTerminal, Write};
-    let mut stdout = std::io::stdout().lock();
+    let mut stdout: std::io::StdoutLock<'_> = std::io::stdout().lock();
     if stdout.is_terminal() {
         write!(stdout, "{}", path.to_string_lossy().escape_default())?;
     } else {

@@ -18,15 +18,15 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
-        let temp = tempfile::tempdir().unwrap();
-        let root = temp.path().join("root");
+        let temp: tempfile::TempDir = tempfile::tempdir().unwrap();
+        let root: PathBuf = temp.path().join("root");
         fs::create_dir(&root).unwrap();
-        let store = SnapshotStore::new(temp.path().join("data")).unwrap();
+        let store: SnapshotStore = SnapshotStore::new(temp.path().join("data")).unwrap();
         Self { temp, root, store }
     }
 
     fn write(&self, name: &str, bytes: impl AsRef<[u8]>) {
-        let path = self.root.join(name);
+        let path: PathBuf = self.root.join(name);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, bytes).unwrap();
     }
@@ -42,7 +42,7 @@ impl Fixture {
     }
 
     fn cli(&self, args: &[&str], input: &[u8]) -> std::process::Output {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_sift"))
+        let mut child: std::process::Child = Command::new(env!("CARGO_BIN_EXE_sift"))
             .current_dir(&self.root)
             .env("XDG_DATA_HOME", self.temp.path().join("cli"))
             .args(args)
@@ -62,7 +62,7 @@ fn count(output: std::process::Output) -> usize {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let text = String::from_utf8(output.stdout).unwrap();
+    let text: String = String::from_utf8(output.stdout).unwrap();
     assert_eq!(text.lines().count(), 1);
     SnapshotHandle::from_path(text.trim())
         .unwrap()
@@ -73,7 +73,7 @@ fn count(output: std::process::Output) -> usize {
 
 #[test]
 fn ignore_flags_hidden_nested_rules_and_explicit_overrides() {
-    let f = Fixture::new();
+    let f: Fixture = Fixture::new();
     f.write(".ignore", "ignored/\n");
     f.write(".gitignore", "git/\n*.tmp\n!keep.tmp\n");
     f.write("visible.txt", "visible");
@@ -114,12 +114,12 @@ fn ignore_flags_hidden_nested_rules_and_explicit_overrides() {
 
 #[test]
 fn mixed_globs_directories_and_unusual_names_deduplicate() {
-    let f = Fixture::new();
+    let f: Fixture = Fixture::new();
     f.write("src/a.rs", "alpha");
     f.write("src/nested/b.rs", "beta");
     f.write("src/name with\nnewline.txt", "gamma");
     f.write("literal[1].txt", "delta");
-    let h = f
+    let h: SnapshotHandle = f
         .index(
             &["src", "src/**/*.rs", "./src/a.rs", "literal[1].txt"],
             DiscoveryOptions::default(),
@@ -158,7 +158,7 @@ fn mixed_globs_directories_and_unusual_names_deduplicate() {
 #[test]
 fn discovered_bad_files_skip_but_explicit_files_fail() {
     use std::os::unix::fs::symlink;
-    let f = Fixture::new();
+    let f: Fixture = Fixture::new();
     f.write("good.txt", "needle");
     f.write("binary", b"a\0b");
     f.write("invalid", [255]);
@@ -168,7 +168,7 @@ fn discovered_bad_files_skip_but_explicit_files_fail() {
         .unwrap();
     symlink("good.txt", f.root.join("link")).unwrap();
     symlink(".", f.root.join("cycle")).unwrap();
-    let output = f.cli(&["index", "."], b"");
+    let output: std::process::Output = f.cli(&["index", "."], b"");
     assert!(String::from_utf8_lossy(&output.stderr).contains("skipped"));
     assert_eq!(count(output), 1);
     for path in ["binary", "invalid", "large", "link", "cycle/good.txt"] {
@@ -180,15 +180,15 @@ fn discovered_bad_files_skip_but_explicit_files_fail() {
 
 #[test]
 fn stdin_and_typed_documents_have_nonfilesystem_names_and_stream_lines() {
-    let f = Fixture::new();
-    let output = f.cli(
+    let f: Fixture = Fixture::new();
+    let output: std::process::Output = f.cli(
         &["index", "--stdin", "--name", "/tmp/source.rs"],
         b"first\nneedle\n",
     );
     assert!(output.status.success(), "{:?}", output);
-    let handle =
+    let handle: SnapshotHandle =
         SnapshotHandle::from_path(String::from_utf8(output.stdout).unwrap().trim()).unwrap();
-    let result = handle
+    let result: sift::SearchResult = handle
         .query(&SearchQuery::new("needle"))
         .unwrap()
         .results
@@ -202,7 +202,7 @@ fn stdin_and_typed_documents_have_nonfilesystem_names_and_stream_lines() {
             .as_os_str()
             .is_empty()
     );
-    let docs = vec![
+    let docs: Vec<TextDocument> = vec![
         TextDocument {
             name: "one".into(),
             text: "alpha".into(),
@@ -243,11 +243,11 @@ fn stdin_and_typed_documents_have_nonfilesystem_names_and_stream_lines() {
 #[test]
 fn unreadable_files_non_utf8_names_and_empty_directories() {
     use std::os::unix::{ffi::OsStringExt, fs::PermissionsExt};
-    let f = Fixture::new();
+    let f: Fixture = Fixture::new();
     fs::create_dir(f.root.join("empty")).unwrap();
     assert!(f.index(&["empty"], DiscoveryOptions::default()).is_err());
     f.write("good", "needle");
-    let bad_name = std::ffi::OsString::from_vec(vec![b'b', 255]);
+    let bad_name: std::ffi::OsString = std::ffi::OsString::from_vec(vec![b'b', 255]);
     fs::write(f.root.join(&bad_name), "invalid name").unwrap();
     assert_eq!(
         f.index(&["."], DiscoveryOptions::default())
@@ -266,7 +266,7 @@ fn unreadable_files_non_utf8_names_and_empty_directories() {
             .is_err()
     );
     f.write("unreadable", "secret");
-    let path = f.root.join("unreadable");
+    let path: PathBuf = f.root.join("unreadable");
     fs::set_permissions(&path, fs::Permissions::from_mode(0o0)).unwrap();
     if fs::File::open(&path).is_err() {
         assert_eq!(
@@ -297,7 +297,7 @@ fn unreadable_files_non_utf8_names_and_empty_directories() {
 
 #[test]
 fn git_exclude_and_root_boundary_are_consistent() {
-    let f = Fixture::new();
+    let f: Fixture = Fixture::new();
     fs::write(f.temp.path().join(".ignore"), "root/\n*.rs\n").unwrap();
     f.write(".git/info/exclude", "excluded.rs\n");
     f.write("excluded.rs", "excluded");

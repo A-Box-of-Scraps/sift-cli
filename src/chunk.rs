@@ -13,13 +13,13 @@ pub struct Chunk<'a> {
 }
 
 pub fn chunk_text(text: &str) -> Vec<Chunk<'_>> {
-    let mut line_starts = vec![0];
+    let mut line_starts: Vec<usize> = vec![0];
     line_starts.extend(
         text.match_indices('\n')
             .map(|(offset, _)| offset + 1)
             .filter(|offset| *offset < text.len()),
     );
-    let mut chunks = Vec::new();
+    let mut chunks: Vec<Chunk<'_>> = Vec::new();
     let mut start = 0;
     while start < text.len() {
         let first_line = line_starts.partition_point(|offset| *offset <= start) - 1;
@@ -60,7 +60,7 @@ mod tests {
     use super::*;
 
     fn assert_coverage(text: &str) {
-        let chunks = chunk_text(text);
+        let chunks: Vec<Chunk<'_>> = chunk_text(text);
         let mut covered = 0;
         for chunk in &chunks {
             assert!(chunk.start_byte <= covered);
@@ -104,8 +104,8 @@ mod tests {
 
     #[test]
     fn line_windows_overlap_without_extra_terminal_chunk() {
-        let text = "line\n".repeat(60);
-        let chunks = chunk_text(&text);
+        let text: String = "line\n".repeat(60);
+        let chunks: Vec<Chunk<'_>> = chunk_text(&text);
         assert_eq!(chunks.len(), 2);
         assert_eq!((chunks[0].start_line, chunks[0].end_line), (1, 32));
         assert_eq!((chunks[1].start_line, chunks[1].end_line), (29, 60));

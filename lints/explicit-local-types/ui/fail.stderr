@@ -1,0 +1,112 @@
+error: non-primitive local binding needs an explicit type
+  --> $DIR/fail.rs:14:9
+   |
+LL |     let user = load_user()?;
+   |         ^^^^- help: add a type annotation: `: User`
+   |
+   = note: `#[deny(explicit_local_types)]` on by default
+
+error: non-primitive local binding needs an explicit type
+  --> $DIR/fail.rs:15:9
+   |
+LL |     let client = Arc::new(User);
+   |         ^^^^^^- help: add a type annotation: `: std::sync::Arc<User>`
+
+error: non-primitive local binding needs an explicit type
+  --> $DIR/fail.rs:16:9
+   |
+LL |     let handlers = vec![Box::new(User) as Box<dyn Handler>];
+   |         ^^^^^^^^- help: add a type annotation: `: std::vec::Vec<std::boxed::Box<dyn Handler>>`
+
+error: non-primitive local binding needs an explicit type
+  --> $DIR/fail.rs:17:9
+   |
+LL |     let state = Some(User);
+   |         ^^^^^- help: add a type annotation: `: std::option::Option<User>`
+
+error: non-primitive local binding needs an explicit type
+  --> $DIR/fail.rs:18:9
+   |
+LL |     let string = String::new();
+   |         ^^^^^^- help: add a type annotation: `: std::string::String`
+
+error: non-primitive local binding needs an explicit type
+  --> $DIR/fail.rs:19:9
+   |
+LL |     let reference = &user;
+   |         ^^^^^^^^^- help: add a type annotation: `: &User`
+
+error: non-primitive local binding needs an explicit type
+  --> $DIR/fail.rs:20:9
+   |
+LL |     let array = [1, 2];
+   |         ^^^^^- help: add a type annotation: `: [i32; 2]`
+
+error: non-primitive local binding needs an explicit type
+  --> $DIR/fail.rs:21:9
+   |
+LL |     let slice = &array[..];
+   |         ^^^^^- help: add a type annotation: `: &[i32]`
+
+error: non-primitive local binding needs an explicit type
+  --> $DIR/fail.rs:22:9
+   |
+LL |     let (left, right) = (User, User);
+   |         ^^^^^^^^^^^^^- help: add a type annotation: `: (User, User)`
+
+error: non-primitive local binding needs an explicit type
+  --> $DIR/fail.rs:23:9
+   |
+LL |     let Some(value) = Some(User) else { return Ok(()) };
+   |         ^^^^^^^^^^^- help: add a type annotation: `: std::option::Option<User>`
+
+error: non-primitive local binding needs an explicit type
+  --> $DIR/fail.rs:24:9
+   |
+LL |     let placeholder: _ = User;
+   |         ^^^^^^^^^^^  - help: add a type annotation: `User`
+
+error: non-primitive local binding needs an explicit type
+  --> $DIR/fail.rs:25:9
+   |
+LL |     let partial: Vec<_> = vec![User];
+   |         ^^^^^^^  ------ help: add a type annotation: `std::vec::Vec<User>`
+
+error: non-primitive local binding needs an explicit type
+  --> $DIR/fail.rs:26:9
+   |
+LL |     let borrowed: &Vec<_> = &vec![User];
+   |         ^^^^^^^^  ------- help: add a type annotation: `&std::vec::Vec<User>`
+
+error: non-primitive local binding needs an explicit type
+  --> $DIR/fail.rs:27:9
+   |
+LL |     let bytes = b"foo";
+   |         ^^^^^- help: add a type annotation: `: &[u8; 3]`
+
+error: non-primitive local binding needs an explicit type
+  --> $DIR/fail.rs:28:9
+   |
+LL |     let delayed;
+   |         ^^^^^^^- help: add a type annotation: `: User`
+
+error: non-primitive local binding needs an explicit type
+  --> $DIR/fail.rs:30:9
+   |
+LL |     let associated: Box<dyn Iterator<Item = _>> = Box::new(0..3);
+   |         ^^^^^^^^^^  --------------------------- help: add a type annotation: `std::boxed::Box<dyn std::iter::Iterator<Item = i32>>`
+
+error: non-primitive local binding needs an explicit type
+  --> $DIR/fail.rs:31:9
+   |
+LL |     let function_pointer: fn() -> _ = || User;
+   |         ^^^^^^^^^^^^^^^^  --------- help: add a type annotation: `fn() -> User`
+
+error: non-primitive local binding needs an explicit type
+  --> $DIR/fail.rs:32:9
+   |
+LL |     let const_placeholder: [u8; _] = [0; 3];
+   |         ^^^^^^^^^^^^^^^^^  ------- help: add a type annotation: `[u8; 3]`
+
+error: aborting due to 18 previous errors
+

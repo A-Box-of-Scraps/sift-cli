@@ -1,10 +1,10 @@
 pub(crate) fn terms(text: &str) -> Vec<String> {
-    let mut terms = Vec::new();
+    let mut terms: Vec<String> = Vec::new();
     for token in text
         .split(|c: char| !c.is_alphanumeric() && c != '_')
         .filter(|s| !s.is_empty())
     {
-        let whole = token.to_lowercase();
+        let whole: String = token.to_lowercase();
         terms.push(whole.clone());
         for word in token.split('_').filter(|s| !s.is_empty()) {
             split_word(word, &whole, &mut terms);
@@ -14,7 +14,7 @@ pub(crate) fn terms(text: &str) -> Vec<String> {
 }
 
 fn split_word(word: &str, whole: &str, terms: &mut Vec<String>) {
-    let chars: Vec<_> = word.char_indices().collect();
+    let chars: Vec<(usize, char)> = word.char_indices().collect();
     let mut start = 0;
     for i in 1..chars.len() {
         let previous = chars[i - 1].1;
@@ -25,14 +25,14 @@ fn split_word(word: &str, whole: &str, terms: &mut Vec<String>) {
                 || previous.is_numeric()
                 || (previous.is_uppercase() && next_lower))
         {
-            let part = word[start..chars[i].0].to_lowercase();
+            let part: String = word[start..chars[i].0].to_lowercase();
             if part != whole {
                 terms.push(part);
             }
             start = chars[i].0;
         }
     }
-    let part = word[start..].to_lowercase();
+    let part: String = word[start..].to_lowercase();
     if part != whole {
         terms.push(part);
     }

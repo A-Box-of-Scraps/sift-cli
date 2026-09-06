@@ -31,7 +31,7 @@ impl SearchQuery {
         if self.text.len() > 4096 {
             return Err(Error::InvalidOptions("query exceeds 4096 bytes".into()));
         }
-        let terms: BTreeSet<_> = tokenize::terms(&self.text)
+        let terms: BTreeSet<String> = tokenize::terms(&self.text)
             .into_iter()
             .filter(|term| term.chars().any(char::is_alphanumeric))
             .collect();
@@ -40,7 +40,7 @@ impl SearchQuery {
                 "query must contain between 1 and 64 searchable terms".into(),
             ));
         }
-        let path = self
+        let path: Option<String> = self
             .path
             .as_deref()
             .map(normalize_path)
@@ -61,7 +61,7 @@ fn normalize_path(path: &str) -> Result<Option<String>> {
             "path filter must be root-relative without parent traversal".into(),
         ));
     }
-    let normalized = path
+    let normalized: String = path
         .split('/')
         .filter(|part| !part.is_empty() && *part != ".")
         .collect::<Vec<_>>()
@@ -107,8 +107,8 @@ pub(crate) fn overlaps(candidate: &SearchResult, results: &[SearchResult]) -> bo
 }
 
 pub(crate) fn select(candidates: Vec<SearchResult>, limit: usize) -> Vec<SearchResult> {
-    let mut results = Vec::new();
-    let mut deferred = Vec::new();
+    let mut results: Vec<SearchResult> = Vec::new();
+    let mut deferred: Vec<SearchResult> = Vec::new();
     for candidate in candidates {
         if overlaps(&candidate, &results) {
             continue;
@@ -148,8 +148,8 @@ fn near_duplicate(left: &str, right: &str) -> bool {
     let tokens = |text: &str| -> BTreeSet<String> {
         text.split_whitespace().map(str::to_lowercase).collect()
     };
-    let left = tokens(left);
-    let right = tokens(right);
+    let left: BTreeSet<String> = tokens(left);
+    let right: BTreeSet<String> = tokens(right);
     let union = left.union(&right).count();
     union > 0 && left.intersection(&right).count() * 100 >= union * 85
 }
@@ -175,12 +175,12 @@ mod tests {
 
     #[test]
     fn similar_excerpts_are_deferred_but_remain_available() {
-        let candidates = vec![
+        let candidates: Vec<SearchResult> = vec![
             hit("a", "first", 0, "one two three four five six seven"),
             hit("a", "copy", 0, "one two three four five six seven eight"),
             hit("a", "other", 0, "different implementation"),
         ];
-        let results = select(candidates.clone(), 2);
+        let results: Vec<SearchResult> = select(candidates.clone(), 2);
         assert_eq!(results[1].path, "other");
         assert_eq!(select(candidates, 3)[2].path, "copy");
         assert!(!near_duplicate("", ""));
@@ -189,20 +189,20 @@ mod tests {
 
     #[test]
     fn file_quota_is_soft_and_root_scoped() {
-        let candidates = vec![
+        let candidates: Vec<SearchResult> = vec![
             hit("a", "same", 0, "first"),
             hit("a", "same", 20, "second"),
             hit("a", "same", 40, "third"),
             hit("b", "same", 0, "fourth"),
         ];
-        let results = select(candidates.clone(), 3);
+        let results: Vec<SearchResult> = select(candidates.clone(), 3);
         assert_eq!(results[2].root_id, "b");
         assert_eq!(select(candidates, 4)[3].snippet, "third");
     }
 
     #[test]
     fn deferred_excerpts_do_not_overlap_later_selections() {
-        let results = select(
+        let results: Vec<SearchResult> = select(
             vec![
                 hit("a", "first", 0, "copy"),
                 hit("a", "second", 0, "copy"),

@@ -84,7 +84,7 @@ enum Command {
 }
 
 fn run(cli: Cli) -> sift::Result<()> {
-    let output = match cli.command {
+    let output: String = match cli.command {
         Command::Index {
             mut files,
             root,
@@ -97,16 +97,17 @@ fn run(cli: Cli) -> sift::Result<()> {
             stdin,
             name,
         } => {
-            let store = SnapshotStore::from_environment()?;
-            let handle = if stdin {
+            let store: SnapshotStore = SnapshotStore::from_environment()?;
+            let handle: SnapshotHandle = if stdin {
                 index_stdin(&store, name)?
             } else {
-                let root = root.map(Ok).unwrap_or_else(std::env::current_dir)?;
+                let root: PathBuf = root.map(Ok).unwrap_or_else(std::env::current_dir)?;
                 if files0_from.is_some() {
                     read_file_list(&root, &mut files)?;
                 }
-                let request = IndexRequest { root, files };
-                let base = extend.map(SnapshotHandle::from_path).transpose()?;
+                let request: IndexRequest = IndexRequest { root, files };
+                let base: Option<SnapshotHandle> =
+                    extend.map(SnapshotHandle::from_path).transpose()?;
                 store.index_roots(
                     &[(root_name, request)],
                     &sift::DiscoveryOptions {
@@ -131,12 +132,13 @@ fn run(cli: Cli) -> sift::Result<()> {
             json,
             root,
         } => {
-            let response = SnapshotHandle::from_path(handle)?.query(&SearchQuery {
-                text: query,
-                limit,
-                path,
-                root,
-            })?;
+            let response: sift::QueryResponse =
+                SnapshotHandle::from_path(handle)?.query(&SearchQuery {
+                    text: query,
+                    limit,
+                    path,
+                    root,
+                })?;
             output::query(&response, json)?
         }
         Command::Delete { handle } => {
@@ -148,7 +150,8 @@ fn run(cli: Cli) -> sift::Result<()> {
             SnapshotStore::from_environment()?.cleanup_staging()?
         ),
         Command::Check { handle } => {
-            let statuses = SnapshotHandle::from_path(handle)?.check_staleness()?;
+            let statuses: Vec<sift::SourceStatus> =
+                SnapshotHandle::from_path(handle)?.check_staleness()?;
             format!(
                 "{}\n",
                 serde_json::to_string(&statuses)
@@ -172,7 +175,7 @@ fn ignore_mode(no_ignore: bool, no_gitignore: bool) -> sift::IgnoreMode {
 }
 
 fn index_stdin(store: &SnapshotStore, name: Option<String>) -> sift::Result<SnapshotHandle> {
-    let mut bytes = Vec::new();
+    let mut bytes: Vec<u8> = Vec::new();
     std::io::stdin()
         .lock()
         .take(sift::MAX_FILE_BYTES + 1)
@@ -182,7 +185,7 @@ fn index_stdin(store: &SnapshotStore, name: Option<String>) -> sift::Result<Snap
             "stdin exceeds the 8 MiB limit".into(),
         ));
     }
-    let text = String::from_utf8(bytes)
+    let text: String = String::from_utf8(bytes)
         .map_err(|_| sift::Error::InvalidOptions("stdin is not valid UTF-8".into()))?;
     store.index_documents(&[sift::TextDocument {
         name: name.unwrap_or_else(|| "stdin".into()),
@@ -192,9 +195,9 @@ fn index_stdin(store: &SnapshotStore, name: Option<String>) -> sift::Result<Snap
 
 fn read_file_list(root: &std::path::Path, files: &mut Vec<PathBuf>) -> sift::Result<()> {
     use std::io::BufRead;
-    let mut input = std::io::stdin().lock();
+    let mut input: std::io::StdinLock<'_> = std::io::stdin().lock();
     loop {
-        let mut bytes = Vec::new();
+        let mut bytes: Vec<u8> = Vec::new();
         if input.read_until(0, &mut bytes)? == 0 {
             break;
         }
@@ -215,7 +218,7 @@ fn read_file_list(root: &std::path::Path, files: &mut Vec<PathBuf>) -> sift::Res
         let path: PathBuf = String::from_utf8(bytes)
             .map_err(|_| sift::Error::InvalidOptions("file path must be UTF-8".into()))?
             .into();
-        let absolute = root.join(&path);
+        let absolute: PathBuf = root.join(&path);
         if !std::fs::symlink_metadata(&absolute).is_ok_and(|m| m.is_file()) {
             return Err(sift::Error::Input {
                 path,
